@@ -39,7 +39,7 @@ export default async function FriskPage({ searchParams }: Props) {
       // Fast path: cached + fresh, render directly server-side.
       return (
         <FriskShell subhead="Score card from the library.">
-          <ScoreCardView card={cached} cached />
+          <ScoreCardView card={cached} cached pmid={pubmed_id} />
         </FriskShell>
       );
     }
@@ -50,7 +50,7 @@ export default async function FriskPage({ searchParams }: Props) {
     // the RSC stream and crash hydration.
     return (
       <FriskShell subhead="Fresh from PubMed.">
-        <AutoFriskClient abstract={abstract} />
+        <AutoFriskClient abstract={abstract} pmid={pubmed_id} />
       </FriskShell>
     );
   }

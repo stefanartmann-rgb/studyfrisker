@@ -314,8 +314,15 @@ function CardView({
               </span>
             </div>
             <p className="text-sm leading-relaxed text-ink">{sc.verdict}</p>
-            <p className="mt-2 text-xs text-ink/50">
-              PubMed PMID {card.pmid}
+            <p className="mt-2 text-xs">
+              <a
+                href={`https://pubmed.ncbi.nlm.nih.gov/${card.pmid}/`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
+                View on PubMed (PMID {card.pmid}) ↗
+              </a>
             </p>
           </div>
         )}

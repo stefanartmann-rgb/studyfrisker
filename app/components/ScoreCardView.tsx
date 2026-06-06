@@ -4,9 +4,16 @@ import { BAND_STYLES, dimensionBarColor } from "./band-styles";
 type Props = {
   card: EngineOutput;
   cached: boolean;
+  /**
+   * PubMed PMID, when the score card originated from a PubMed lookup.
+   * Renders a "View on PubMed" link at the bottom of the card. Undefined
+   * for manual-paste frisks and library-tile views (we don't currently
+   * store PMID on the cards row).
+   */
+  pmid?: string;
 };
 
-export function ScoreCardView({ card, cached }: Props) {
+export function ScoreCardView({ card, cached, pmid }: Props) {
   const { title, topic, summary, score_card: sc } = card;
   const styles = BAND_STYLES[sc.band];
 
@@ -91,8 +98,21 @@ export function ScoreCardView({ card, cached }: Props) {
         </ul>
       </section>
 
+      {pmid && (
+        <footer className="mt-6 border-t border-ink/10 pt-4">
+          <a
+            href={`https://pubmed.ncbi.nlm.nih.gov/${pmid}/`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+          >
+            View this study on PubMed ↗
+          </a>
+        </footer>
+      )}
+
       {cached && (
-        <footer className="mt-6 text-xs text-ink/50">Served from cache</footer>
+        <footer className="mt-2 text-xs text-ink/50">Served from cache</footer>
       )}
     </article>
   );

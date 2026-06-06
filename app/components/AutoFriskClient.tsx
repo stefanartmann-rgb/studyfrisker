@@ -11,6 +11,8 @@ const INITIAL_STATE: FriskState = { status: "idle" };
 
 type Props = {
   abstract: string;
+  /** PMID the abstract was fetched from, passed through to ScoreCardView. */
+  pmid?: string;
 };
 
 /**
@@ -23,7 +25,7 @@ type Props = {
  * inside the page's streaming response — so Netlify's RSC-stream timeout
  * can't corrupt the render and trigger a hydration crash on slow frisks.
  */
-export function AutoFriskClient({ abstract }: Props) {
+export function AutoFriskClient({ abstract, pmid }: Props) {
   const [state, formAction, pending] = useActionState(
     friskAction,
     INITIAL_STATE,
@@ -58,7 +60,7 @@ export function AutoFriskClient({ abstract }: Props) {
       )}
 
       {state.status === "ok" && (
-        <ScoreCardView card={state.card} cached={state.cached} />
+        <ScoreCardView card={state.card} cached={state.cached} pmid={pmid} />
       )}
 
       {state.status === "error" && (
