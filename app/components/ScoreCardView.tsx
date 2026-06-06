@@ -1,42 +1,10 @@
-import type { Band, EngineOutput } from "@/lib/scoring";
+import type { EngineOutput } from "@/lib/scoring";
+import { BAND_STYLES, dimensionBarColor } from "./band-styles";
 
 type Props = {
   card: EngineOutput;
   cached: boolean;
 };
-
-const BAND_STYLES: Record<
-  Band,
-  { badge: string; border: string; score: string }
-> = {
-  Solid: {
-    badge: "bg-accent text-white",
-    border: "border-accent/30",
-    score: "text-accent",
-  },
-  Mixed: {
-    badge: "bg-amber-100 text-amber-800",
-    border: "border-amber-200",
-    score: "text-amber-700",
-  },
-  Weak: {
-    badge: "bg-orange-100 text-orange-800",
-    border: "border-orange-200",
-    score: "text-orange-700",
-  },
-  Junk: {
-    badge: "bg-red-100 text-red-800",
-    border: "border-red-200",
-    score: "text-red-700",
-  },
-};
-
-function dimensionBarColor(score: number): string {
-  if (score >= 75) return "bg-accent";
-  if (score >= 50) return "bg-amber-500";
-  if (score >= 25) return "bg-orange-500";
-  return "bg-red-500";
-}
 
 export function ScoreCardView({ card, cached }: Props) {
   const { title, topic, summary, score_card: sc } = card;
@@ -75,13 +43,27 @@ export function ScoreCardView({ card, cached }: Props) {
         {sc.verdict}
       </p>
 
-      <p className="mt-6 rounded-xl bg-background p-4 text-sm leading-relaxed text-ink">
+      <div className="mt-6 flex items-start gap-3 rounded-xl border border-ink/15 bg-white p-4">
+        <FundingIcon />
+        <div>
+          <div className="text-xs font-semibold tracking-wider text-ink/60 uppercase">
+            Funded by
+          </div>
+          <p className="mt-1 text-sm leading-relaxed text-ink">
+            {sc.funding_flag}
+          </p>
+        </div>
+      </div>
+
+      <p className="mt-4 rounded-xl bg-background p-4 text-sm leading-relaxed text-ink">
         {summary.tldr}
       </p>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        <Callout label="Biggest red flag" body={sc.biggest_red_flag} />
-        <Callout label="Funding flag" body={sc.funding_flag} />
+      <div className="mt-4 space-y-1 rounded-xl border border-ink/15 p-4">
+        <div className="text-xs font-semibold tracking-wider text-ink/60 uppercase">
+          Biggest red flag
+        </div>
+        <p className="text-sm leading-relaxed text-ink">{sc.biggest_red_flag}</p>
       </div>
 
       <section className="mt-8 space-y-3">
@@ -116,13 +98,23 @@ export function ScoreCardView({ card, cached }: Props) {
   );
 }
 
-function Callout({ label, body }: { label: string; body: string }) {
+function FundingIcon() {
   return (
-    <div className="space-y-1 rounded-xl border border-ink/15 p-4">
-      <div className="text-xs font-semibold tracking-wider text-ink/60 uppercase">
-        {label}
-      </div>
-      <p className="text-sm leading-relaxed text-ink">{body}</p>
-    </div>
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="mt-0.5 shrink-0 text-ink/60"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v10" />
+      <path d="M15 10c0-1.1-1.3-2-3-2s-3 .9-3 2 1.3 2 3 2 3 .9 3 2-1.3 2-3 2-3-.9-3-2" />
+    </svg>
   );
 }

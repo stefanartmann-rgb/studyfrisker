@@ -1,6 +1,11 @@
 import crypto from "node:crypto";
 import { createSupabaseServiceClient } from "./supabase";
-import type { EngineOutput, ScoreCard, StudySummary } from "./scoring";
+import type {
+  Band,
+  EngineOutput,
+  ScoreCard,
+  StudySummary,
+} from "./scoring";
 
 /**
  * Supabase cache layer for frisked study cards.
@@ -16,16 +21,25 @@ import type { EngineOutput, ScoreCard, StudySummary } from "./scoring";
 const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
 
 /**
- * Tile shape used by Explore: the card identity + headline content, no
- * full score breakdown. Cheaper to load and the Explore page doesn't
- * need the per-dimension reasons.
+ * Tile shape used by Explore. Includes the at-a-glance score+band and
+ * funding flag (pulled out of score_card jsonb on the server) so the
+ * tile UI can show trust + funder without loading the full score card.
  */
 export type CardTile = {
   study_key: string;
   title: string;
   topic: string;
   summary: StudySummary;
+  overall_score: number;
+  band: Band;
+  funding_flag: string;
 };
+
+/**
+ * Columns selected for tile rendering. Centralised so the three readers
+ * (searchCards, recentCards, and the validator) stay in sync.
+ */
+const TILE_SELECT = "study_key, title, topic, summary, score_card";
 
 /**
  * Produce a stable cache key from raw user input. SHA-256 hex of the input
@@ -151,20 +165,19 @@ export async function searchCards(
 
   try {
     const supabase = createSupabaseServiceClient();
-    // Escape ILIKE wildcards so user input can't trigger surprise wildcards.
     const safe = trimmed.replace(/[%_\\]/g, "\\$&");
     const pattern = `%${safe}%`;
 
     const [titleRes, topicRes] = await Promise.all([
       supabase
         .from("cards")
-        .select("study_key, title, topic, summary")
+        .select(TILE_SELECT)
         .ilike("title", pattern)
         .order("last_verified_at", { ascending: false })
         .limit(limit),
       supabase
         .from("cards")
-        .select("study_key, title, topic, summary")
+        .select(TILE_SELECT)
         .ilike("topic", pattern)
         .order("last_verified_at", { ascending: false })
         .limit(limit),
@@ -180,10 +193,11 @@ export async function searchCards(
     const seen = new Set<string>();
     const merged: CardTile[] = [];
     for (const row of [...(titleRes.data ?? []), ...(topicRes.data ?? [])]) {
-      if (!isValidTile(row)) continue;
-      if (seen.has(row.study_key)) continue;
-      seen.add(row.study_key);
-      merged.push(row);
+      const tile = rowToTile(row);
+      if (!tile) continue;
+      if (seen.has(tile.study_key)) continue;
+      seen.add(tile.study_key);
+      merged.push(tile);
       if (merged.length >= limit) break;
     }
     return merged;
@@ -202,7 +216,7 @@ export async function recentCards(limit = 20): Promise<CardTile[]> {
     const supabase = createSupabaseServiceClient();
     const { data, error } = await supabase
       .from("cards")
-      .select("study_key, title, topic, summary")
+      .select(TILE_SELECT)
       .order("last_verified_at", { ascending: false })
       .limit(limit);
 
@@ -210,24 +224,51 @@ export async function recentCards(limit = 20): Promise<CardTile[]> {
       console.error("[cards] recentCards error:", error);
       return [];
     }
-    return (data ?? []).filter(isValidTile);
+    return (data ?? []).map(rowToTile).filter((t): t is CardTile => t !== null);
   } catch (err) {
     console.error("[cards] recentCards threw:", err);
     return [];
   }
 }
 
-function isValidTile(row: unknown): row is CardTile {
-  if (!row || typeof row !== "object") return false;
+/**
+ * Convert a raw Supabase row to a CardTile. Pulls overall_score/band/
+ * funding_flag out of the score_card jsonb. Returns null on any missing
+ * or wrong-typed field so the tile can be skipped without crashing.
+ */
+function rowToTile(row: unknown): CardTile | null {
+  if (!row || typeof row !== "object") return null;
   const r = row as Record<string, unknown>;
-  if (typeof r.study_key !== "string") return false;
-  if (typeof r.title !== "string") return false;
-  if (typeof r.topic !== "string") return false;
-  if (!r.summary || typeof r.summary !== "object") return false;
-  if (typeof (r.summary as Record<string, unknown>).tldr !== "string") {
-    return false;
+  if (typeof r.study_key !== "string") return null;
+  if (typeof r.title !== "string") return null;
+  if (typeof r.topic !== "string") return null;
+  if (!r.summary || typeof r.summary !== "object") return null;
+  const tldr = (r.summary as Record<string, unknown>).tldr;
+  if (typeof tldr !== "string") return null;
+  if (!r.score_card || typeof r.score_card !== "object") return null;
+  const sc = r.score_card as Record<string, unknown>;
+  if (typeof sc.overall_score !== "number" || !Number.isFinite(sc.overall_score)) {
+    return null;
   }
-  return true;
+  if (
+    sc.band !== "Solid" &&
+    sc.band !== "Mixed" &&
+    sc.band !== "Weak" &&
+    sc.band !== "Junk"
+  ) {
+    return null;
+  }
+  if (typeof sc.funding_flag !== "string") return null;
+
+  return {
+    study_key: r.study_key,
+    title: r.title,
+    topic: r.topic,
+    summary: { tldr },
+    overall_score: sc.overall_score,
+    band: sc.band,
+    funding_flag: sc.funding_flag,
+  };
 }
 
 /**
