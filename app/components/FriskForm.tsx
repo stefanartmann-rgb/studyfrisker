@@ -21,7 +21,7 @@ export function FriskForm() {
         <textarea
           name="input"
           required
-          minLength={50}
+          minLength={15}
           rows={6}
           placeholder="Paste a study reference, abstract, DOI, URL or health claim"
           className="w-full resize-y rounded-xl border border-ink/15 bg-white p-4 text-sm leading-relaxed text-ink shadow-sm placeholder:text-ink/40 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
@@ -29,7 +29,7 @@ export function FriskForm() {
         />
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs text-ink/60">
-            Min 50 characters. Scored live, not from a list.
+            Min 15 characters. Scored live — claims and studies both work.
           </p>
           <button
             type="submit"

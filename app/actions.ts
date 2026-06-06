@@ -7,7 +7,7 @@ import {
   saveCard,
 } from "@/lib/cards";
 
-const MIN_INPUT_LENGTH = 50;
+const MIN_INPUT_LENGTH = 15;
 const MAX_INPUT_LENGTH = 8000;
 
 export type FriskState =
@@ -42,7 +42,8 @@ export async function friskAction(
   if (input.length < MIN_INPUT_LENGTH) {
     return {
       status: "error",
-      message: `Input is too short. Please paste at least ${MIN_INPUT_LENGTH} characters of study text, claim, or reference.`,
+      message:
+        "Input is too short. Paste a study reference, abstract, or at least a one-sentence claim (15+ characters).",
     };
   }
   if (input.length > MAX_INPUT_LENGTH) {
