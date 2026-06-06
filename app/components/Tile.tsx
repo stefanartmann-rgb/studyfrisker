@@ -1,33 +1,25 @@
 import Link from "next/link";
 import type { CardTile } from "@/lib/cards";
-import { BAND_STYLES } from "./band-styles";
 
 type Props = { tile: CardTile };
 
+/**
+ * Library "summary card" — the discovery-surface preview of a frisked
+ * study. Deliberately does NOT show the Trust Score or band: those are
+ * the reveal that happens when the user clicks Frisk and lands on the
+ * full ScoreCardView. The summary covers identity + funding + tldr only.
+ */
 export function Tile({ tile }: Props) {
   const friskHref = `/frisk?study_key=${encodeURIComponent(tile.study_key)}`;
   const playHref = `/play?study_key=${encodeURIComponent(tile.study_key)}`;
-  const badge = BAND_STYLES[tile.band].badge;
 
   return (
     <article className="rounded-2xl border border-ink/10 bg-white p-5">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <span
-          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 ${badge}`}
-        >
-          <span className="text-sm font-bold tabular-nums">
-            {tile.overall_score}
-          </span>
-          <span className="text-[10px] font-semibold tracking-wider uppercase">
-            {tile.band}
-          </span>
-        </span>
-        <span className="inline-block rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium tracking-wider text-primary uppercase">
-          {tile.topic}
-        </span>
-      </div>
+      <span className="inline-block rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium tracking-wider text-primary uppercase">
+        {tile.topic}
+      </span>
 
-      <h3 className="text-base leading-snug font-semibold text-ink sm:text-lg">
+      <h3 className="mt-3 text-base leading-snug font-semibold text-ink sm:text-lg">
         {tile.title}
       </h3>
 

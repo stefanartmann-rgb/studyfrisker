@@ -21,12 +21,13 @@ import type {
 const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
 
 /**
- * DEMO MODE — when false, every cache read returns empty so frisks always
- * run live and no library tiles surface stale results. Cache writes still
- * happen, so flipping this back to true after the demo unlocks all the
- * cards that were saved during the demo. Toggle here:
+ * Cache reads gate. When true (now), repeat frisks of the same input hit
+ * cache and render instantly; library tiles in Explore surface the
+ * accumulated frisk history. Was briefly flipped to false for the
+ * "everything live" demo phase — re-enabled because the all-live Frisk
+ * path made the demo too slow (every visit = full ~15 s engine call).
  */
-const SERVE_CACHED_CARDS = false;
+const SERVE_CACHED_CARDS = true;
 
 /**
  * Tile shape used by Explore. Includes the at-a-glance score+band and
