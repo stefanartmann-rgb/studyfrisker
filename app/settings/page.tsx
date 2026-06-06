@@ -10,6 +10,10 @@ const PRO_FEATURES: Array<{ headline: string; sub?: string }> = [
     headline: "All Play topic categories",
     sub: "Diet, Exercise, Statins, IF, Probiotics, Caffeine, Magnesium",
   },
+  {
+    headline: "Unlimited Explore feed",
+    sub: "Load more than the first 10 PubMed results per search",
+  },
   { headline: "Unlimited frisks per day" },
   { headline: "Save studies to your watchlist" },
   { headline: "Email a PDF report of any frisk" },
