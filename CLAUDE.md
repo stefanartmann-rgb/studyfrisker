@@ -12,7 +12,7 @@ StudyFrisker grades how trustworthy health science is and surfaces who profits f
 - **Frisk-by-study_key**: `/frisk?study_key=<sha256>` renders a library card directly with no form. Falls through to the form when the key isn't cached.
 - **Frisk-by-PubMed-ID**: `/frisk?pubmed_id=<pmid>` fetches the abstract via efetch, hashes it to a study_key, and either renders the cached card (hit) or runs a live frisk + caches it (miss). `loading.tsx` covers the 10–20 s slow path.
 - **Settings**: app section + Pro section with a disabled Upgrade button placeholder.
-- **Theme**: beige `#F6F0E2` background, vivid blue `#2348C9` primary, accent green `#2E9E5B`, deep blue ink `#1A2B5C` text. Light mode only.
+- **Theme**: beige `#F6F0E2` background, deep green `#166534` primary, accent green `#2E9E5B` (brighter, for Solid signalling), deep green-near-black ink `#0F2A1A` text. Light mode only.
 
 ### Stubbed
 - **Play tab**: shows the topic selector chrome and (when handed a `?study_key=`) the title of the card you "would play". No actual swipe game logic.
