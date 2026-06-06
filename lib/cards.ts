@@ -29,6 +29,9 @@ export function normalizeStudyKey(raw: string): string {
  * Look up a cached card by study_key. Returns the card only if it exists
  * AND was verified within the last 60 days. Returns null on any error or
  * on a stale/partial row.
+ *
+ * This is the gated lookup used by the action flow — if it returns null
+ * the action falls through to a live frisk.
  */
 export async function getCachedCard(
   studyKey: string,
@@ -47,7 +50,6 @@ export async function getCachedCard(
     }
     if (!data) return null;
 
-    // Defensive: existing rows may be partial (the table allows nulls).
     if (
       typeof data.title !== "string" ||
       typeof data.topic !== "string" ||
@@ -70,6 +72,49 @@ export async function getCachedCard(
     };
   } catch (err) {
     console.error("[cards] getCachedCard threw:", err);
+    return null;
+  }
+}
+
+/**
+ * Look up a card by study_key with NO age gate. Used by display surfaces
+ * (Frisk page when handed a study_key from Explore, Play page stub) so a
+ * stale card still renders instead of forcing a re-frisk for a view.
+ */
+export async function getCardByStudyKey(
+  studyKey: string,
+): Promise<EngineOutput | null> {
+  try {
+    const supabase = createSupabaseServiceClient();
+    const { data, error } = await supabase
+      .from("cards")
+      .select("title, topic, summary, score_card")
+      .eq("study_key", studyKey)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[cards] getCardByStudyKey query error:", error);
+      return null;
+    }
+    if (!data) return null;
+
+    if (
+      typeof data.title !== "string" ||
+      typeof data.topic !== "string" ||
+      !data.summary ||
+      !data.score_card
+    ) {
+      return null;
+    }
+
+    return {
+      title: data.title,
+      topic: data.topic,
+      summary: data.summary as StudySummary,
+      score_card: data.score_card as ScoreCard,
+    };
+  } catch (err) {
+    console.error("[cards] getCardByStudyKey threw:", err);
     return null;
   }
 }
