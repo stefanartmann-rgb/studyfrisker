@@ -16,6 +16,18 @@ import type { EngineOutput, ScoreCard, StudySummary } from "./scoring";
 const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
 
 /**
+ * Tile shape used by Explore: the card identity + headline content, no
+ * full score breakdown. Cheaper to load and the Explore page doesn't
+ * need the per-dimension reasons.
+ */
+export type CardTile = {
+  study_key: string;
+  title: string;
+  topic: string;
+  summary: StudySummary;
+};
+
+/**
  * Produce a stable cache key from raw user input. SHA-256 hex of the input
  * after trimming, lowercasing, and collapsing whitespace. Lets cache hits
  * survive trivial formatting differences without depending on DOI parsing.
@@ -117,6 +129,105 @@ export async function getCardByStudyKey(
     console.error("[cards] getCardByStudyKey threw:", err);
     return null;
   }
+}
+
+/**
+ * Search the card library by free text. Matches title or topic via ILIKE.
+ *
+ * Title matches take precedence over topic matches (rough relevance
+ * ranking). We issue two queries and merge instead of using PostgREST's
+ * `.or()` because the latter doesn't handle commas in the user input
+ * cleanly. summary.tldr is intentionally NOT searched in v1 — querying
+ * jsonb via PostgREST is fiddly enough that it would muddy the code.
+ *
+ * Returns [] on any error.
+ */
+export async function searchCards(
+  q: string,
+  limit = 20,
+): Promise<CardTile[]> {
+  const trimmed = q.trim();
+  if (!trimmed) return recentCards(limit);
+
+  try {
+    const supabase = createSupabaseServiceClient();
+    // Escape ILIKE wildcards so user input can't trigger surprise wildcards.
+    const safe = trimmed.replace(/[%_\\]/g, "\\$&");
+    const pattern = `%${safe}%`;
+
+    const [titleRes, topicRes] = await Promise.all([
+      supabase
+        .from("cards")
+        .select("study_key, title, topic, summary")
+        .ilike("title", pattern)
+        .order("last_verified_at", { ascending: false })
+        .limit(limit),
+      supabase
+        .from("cards")
+        .select("study_key, title, topic, summary")
+        .ilike("topic", pattern)
+        .order("last_verified_at", { ascending: false })
+        .limit(limit),
+    ]);
+
+    if (titleRes.error) {
+      console.error("[cards] searchCards title error:", titleRes.error);
+    }
+    if (topicRes.error) {
+      console.error("[cards] searchCards topic error:", topicRes.error);
+    }
+
+    const seen = new Set<string>();
+    const merged: CardTile[] = [];
+    for (const row of [...(titleRes.data ?? []), ...(topicRes.data ?? [])]) {
+      if (!isValidTile(row)) continue;
+      if (seen.has(row.study_key)) continue;
+      seen.add(row.study_key);
+      merged.push(row);
+      if (merged.length >= limit) break;
+    }
+    return merged;
+  } catch (err) {
+    console.error("[cards] searchCards threw:", err);
+    return [];
+  }
+}
+
+/**
+ * Most recently verified cards. Empty-query default for Explore.
+ * Returns [] on any error.
+ */
+export async function recentCards(limit = 20): Promise<CardTile[]> {
+  try {
+    const supabase = createSupabaseServiceClient();
+    const { data, error } = await supabase
+      .from("cards")
+      .select("study_key, title, topic, summary")
+      .order("last_verified_at", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error("[cards] recentCards error:", error);
+      return [];
+    }
+    return (data ?? []).filter(isValidTile);
+  } catch (err) {
+    console.error("[cards] recentCards threw:", err);
+    return [];
+  }
+}
+
+function isValidTile(row: unknown): row is CardTile {
+  if (!row || typeof row !== "object") return false;
+  const r = row as Record<string, unknown>;
+  if (typeof r.study_key !== "string") return false;
+  if (typeof r.title !== "string") return false;
+  if (typeof r.topic !== "string") return false;
+  if (!r.summary || typeof r.summary !== "object") return false;
+  if (typeof (r.summary as Record<string, unknown>).tldr !== "string") {
+    return false;
+  }
+  return true;
 }
 
 /**
