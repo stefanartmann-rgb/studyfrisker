@@ -23,7 +23,7 @@ export function FriskForm() {
           required
           minLength={15}
           rows={6}
-          placeholder="Paste a study reference, abstract, DOI, URL or health claim"
+          placeholder="Paste a study reference, abstract or health claim"
           className="w-full resize-y rounded-xl border border-ink/15 bg-white p-4 text-sm leading-relaxed text-ink shadow-sm placeholder:text-ink/40 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
           disabled={pending}
         />

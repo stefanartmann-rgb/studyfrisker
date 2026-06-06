@@ -14,6 +14,14 @@ const PRO_FEATURES: Array<{ headline: string; sub?: string }> = [
     headline: "Unlimited Explore feed",
     sub: "Load more than the first 10 PubMed results per search",
   },
+  {
+    headline: "Frisk by DOI",
+    sub: "Paste a DOI; we fetch the study record and score it",
+  },
+  {
+    headline: "Frisk by URL",
+    sub: "Paste a journal or PubMed URL; we fetch the study and score it",
+  },
   { headline: "Unlimited frisks per day" },
   { headline: "Save studies to your watchlist" },
   { headline: "Email a PDF report of any frisk" },

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AutoFriskClient } from "@/app/components/AutoFriskClient";
 import { FriskForm } from "@/app/components/FriskForm";
 import { ScoreCardView } from "@/app/components/ScoreCardView";
@@ -7,6 +8,7 @@ import {
   normalizeStudyKey,
 } from "@/lib/cards";
 import { fetchPubMedAbstract } from "@/lib/pubmed";
+import { isProUser } from "@/lib/upgrade";
 
 type Props = {
   searchParams: Promise<{ study_key?: string; pubmed_id?: string }>;
@@ -14,6 +16,7 @@ type Props = {
 
 export default async function FriskPage({ searchParams }: Props) {
   const { study_key, pubmed_id } = await searchParams;
+  const isPro = await isProUser();
 
   // Mode 1: ?pubmed_id=X — fetch abstract, render cached card directly
   // (fast path) or hand off to AutoFriskClient for the slow path.
@@ -78,11 +81,65 @@ export default async function FriskPage({ searchParams }: Props) {
     );
   }
 
-  // Mode 3: no params — the standard form.
+  // Mode 3: no params — the standard form, prefixed with the input-mode
+  // pills (Text is free; DOI, URL, Claim Analysis are Pro-locked).
   return (
     <FriskShell subhead="Paste a study or claim and get a Trust Score.">
+      <InputModePills isPro={isPro} />
       <FriskForm />
     </FriskShell>
+  );
+}
+
+// ---------- input mode pills (Pro upsell) ----------
+
+function InputModePills({ isPro }: { isPro: boolean }) {
+  return (
+    <div className="-mx-1 mb-6 flex gap-2 overflow-x-auto px-1 pb-2">
+      <span className="inline-flex shrink-0 items-center rounded-full bg-primary px-3 py-1.5 text-xs font-semibold tracking-wider text-primary-foreground uppercase">
+        Text
+      </span>
+      <LockedPill label="DOI" isPro={isPro} />
+      <LockedPill label="URL" isPro={isPro} />
+      <LockedPill label="Claim Analysis" isPro={isPro} />
+    </div>
+  );
+}
+
+function LockedPill({ label, isPro }: { label: string; isPro: boolean }) {
+  // Pro users see the pill unlocked but they still route to /settings#pro
+  // because DOI / URL / Mode B aren't implemented yet — Settings is the
+  // honest "Coming soon" surface.
+  const classes = isPro
+    ? "border border-primary text-primary hover:bg-primary/5"
+    : "border border-ink/20 text-ink/40 hover:border-ink/40 hover:text-ink/60";
+  return (
+    <Link
+      href="/settings#pro"
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold tracking-wider uppercase transition ${classes}`}
+    >
+      {!isPro && <LockIcon />}
+      {label}
+    </Link>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M9 11V7a3 3 0 0 1 6 0v4" />
+    </svg>
   );
 }
 
