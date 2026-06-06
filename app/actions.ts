@@ -15,7 +15,12 @@ export type FriskState =
   | { status: "ok"; card: EngineOutput; cached: boolean }
   | { status: "error"; message: string };
 
-export const initialFriskState: FriskState = { status: "idle" };
+// NOTE: `initialFriskState` cannot live here. Next.js treats every value
+// export from a `"use server"` file as a server-action reference, so the
+// client would receive an opaque ref instead of `{ status: "idle" }` and
+// useActionState would crash on first render. The constant is defined at
+// the call site in FriskForm.tsx instead. Type exports are erased at build
+// time and are safe.
 
 /**
  * Server Action driving the single-study scoring flow.

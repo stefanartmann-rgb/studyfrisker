@@ -1,13 +1,18 @@
 "use client";
 
 import { useActionState } from "react";
-import { friskAction, initialFriskState } from "@/app/actions";
+import { friskAction, type FriskState } from "@/app/actions";
 import { ScoreCardView } from "./ScoreCardView";
+
+// Defined here (not in actions.ts) because non-function exports from a
+// "use server" file are silently turned into server-action references on
+// the client — the page would crash on load.
+const INITIAL_STATE: FriskState = { status: "idle" };
 
 export function FriskForm() {
   const [state, formAction, pending] = useActionState(
     friskAction,
-    initialFriskState,
+    INITIAL_STATE,
   );
 
   return (
