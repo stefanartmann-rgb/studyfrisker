@@ -21,6 +21,14 @@ import type {
 const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
 
 /**
+ * DEMO MODE — when false, every cache read returns empty so frisks always
+ * run live and no library tiles surface stale results. Cache writes still
+ * happen, so flipping this back to true after the demo unlocks all the
+ * cards that were saved during the demo. Toggle here:
+ */
+const SERVE_CACHED_CARDS = false;
+
+/**
  * Tile shape used by Explore. Includes the at-a-glance score+band and
  * funding flag (pulled out of score_card jsonb on the server) so the
  * tile UI can show trust + funder without loading the full score card.
@@ -62,6 +70,7 @@ export function normalizeStudyKey(raw: string): string {
 export async function getCachedCard(
   studyKey: string,
 ): Promise<EngineOutput | null> {
+  if (!SERVE_CACHED_CARDS) return null;
   try {
     const supabase = createSupabaseServiceClient();
     const { data, error } = await supabase
@@ -110,6 +119,7 @@ export async function getCachedCard(
 export async function getCardByStudyKey(
   studyKey: string,
 ): Promise<EngineOutput | null> {
+  if (!SERVE_CACHED_CARDS) return null;
   try {
     const supabase = createSupabaseServiceClient();
     const { data, error } = await supabase
@@ -160,6 +170,7 @@ export async function searchCards(
   q: string,
   limit = 20,
 ): Promise<CardTile[]> {
+  if (!SERVE_CACHED_CARDS) return [];
   const trimmed = q.trim();
   if (!trimmed) return recentCards(limit);
 
@@ -212,6 +223,7 @@ export async function searchCards(
  * Returns [] on any error.
  */
 export async function recentCards(limit = 20): Promise<CardTile[]> {
+  if (!SERVE_CACHED_CARDS) return [];
   try {
     const supabase = createSupabaseServiceClient();
     const { data, error } = await supabase
