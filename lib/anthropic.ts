@@ -1,20 +1,22 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 /**
- * Generic server-side helper for calling the Anthropic Messages API.
+ * Anthropic SDK helpers.
  *
- * Reads ANTHROPIC_API_KEY from the environment and uses the
- * claude-sonnet-4-6 model. Returns the model's text response as a string.
- *
- * Server-side only — never import this into client components, or the API
- * key would be exposed to the browser.
+ * Reads ANTHROPIC_API_KEY from the environment. Server-side only — never
+ * import this into client components, or the API key would be exposed to
+ * the browser.
  */
 
-const MODEL = "claude-sonnet-4-6";
+export const MODEL = "claude-sonnet-4-6";
 
 let client: Anthropic | null = null;
 
-function getClient(): Anthropic {
+/**
+ * Lazily-constructed singleton Anthropic client. Throws at first call if
+ * ANTHROPIC_API_KEY is missing.
+ */
+export function getAnthropicClient(): Anthropic {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error("Missing environment variable: ANTHROPIC_API_KEY");
   }
@@ -30,14 +32,15 @@ export interface CallModelOptions {
 }
 
 /**
- * Send a system prompt and a user message to Claude and return the text reply.
+ * Generic text-in / text-out helper. Sends a system prompt and a user
+ * message to Claude and returns the text reply.
  */
 export async function callModel(
   systemPrompt: string,
   userMessage: string,
   options: CallModelOptions = {},
 ): Promise<string> {
-  const response = await getClient().messages.create({
+  const response = await getAnthropicClient().messages.create({
     model: MODEL,
     max_tokens: options.maxTokens ?? 4096,
     system: systemPrompt,
