@@ -2,13 +2,15 @@
  * NCBI E-utilities client for PubMed search and abstract retrieval.
  *
  * Two surfaces:
- *  - searchPubMed(q):  esearch + esummary → light metadata for tile rendering
+ *  - searchPubMed(q, limit): esearch + esummary → light metadata for tile
+ *    rendering, plus the total available count so the caller can decide
+ *    whether to render a "Show More" affordance.
  *  - fetchPubMedAbstract(pmid): efetch → plain-text abstract for the engine
  *
- * NCBI_API_KEY is read from the environment if present (raises the rate limit
- * from 3 req/s to 10 req/s); the public endpoint also works without one.
+ * NCBI_API_KEY is read from the environment if present (raises the rate
+ * limit from 3 req/s to 10 req/s); the public endpoint also works without
+ * one. Errors are logged and the helpers degrade gracefully.
  *
- * Errors are logged and the helpers degrade gracefully (return [] / null).
  * Server-side only.
  */
 
@@ -19,7 +21,12 @@ export type PubMedResult = {
   title: string;
   journal: string; // short form (e.g., "N Engl J Med")
   year: string;
-  authors: string[]; // up to 3 last-first author labels
+  authors: string[]; // up to 3 author names
+};
+
+export type PubMedSearchResult = {
+  results: PubMedResult[];
+  total: number; // total PubMed matches available for this query
 };
 
 function withApiKey(url: URL): URL {
@@ -29,18 +36,20 @@ function withApiKey(url: URL): URL {
 }
 
 /**
- * Live search PubMed by keyword. Returns up to `limit` results in
- * PubMed's relevance order. [] on any failure.
+ * Live search PubMed by keyword. Returns up to `limit` results in PubMed's
+ * relevance order, plus the total count available so the caller can paginate.
+ * { results: [], total: 0 } on any failure.
  */
 export async function searchPubMed(
   query: string,
   limit = 10,
-): Promise<PubMedResult[]> {
+): Promise<PubMedSearchResult> {
+  const empty: PubMedSearchResult = { results: [], total: 0 };
   try {
     const trimmed = query.trim();
-    if (!trimmed) return [];
+    if (!trimmed) return empty;
 
-    // 1. esearch -> list of PMIDs in relevance order
+    // 1. esearch -> PMIDs in relevance order + total count
     const searchUrl = withApiKey(new URL(`${NCBI_BASE}/esearch.fcgi`));
     searchUrl.searchParams.set("db", "pubmed");
     searchUrl.searchParams.set("term", trimmed);
@@ -51,13 +60,16 @@ export async function searchPubMed(
     const searchRes = await fetch(searchUrl.toString(), { cache: "no-store" });
     if (!searchRes.ok) {
       console.error("[pubmed] esearch HTTP", searchRes.status);
-      return [];
+      return empty;
     }
     const searchJson = (await searchRes.json()) as {
-      esearchresult?: { idlist?: string[] };
+      esearchresult?: { idlist?: string[]; count?: string };
     };
     const ids = searchJson?.esearchresult?.idlist ?? [];
-    if (ids.length === 0) return [];
+    const totalRaw = searchJson?.esearchresult?.count ?? "0";
+    const parsedTotal = Number.parseInt(totalRaw, 10);
+    const total = Number.isFinite(parsedTotal) ? parsedTotal : 0;
+    if (ids.length === 0) return { results: [], total };
 
     // 2. esummary -> metadata for those PMIDs
     const summaryUrl = withApiKey(new URL(`${NCBI_BASE}/esummary.fcgi`));
@@ -70,13 +82,15 @@ export async function searchPubMed(
     });
     if (!summaryRes.ok) {
       console.error("[pubmed] esummary HTTP", summaryRes.status);
-      return [];
+      return { results: [], total };
     }
     const summaryJson = (await summaryRes.json()) as {
       result?: Record<string, unknown>;
     };
     const result = summaryJson?.result;
-    if (!result || typeof result !== "object") return [];
+    if (!result || typeof result !== "object") {
+      return { results: [], total };
+    }
 
     // Preserve relevance order from esearch.
     const out: PubMedResult[] = [];
@@ -99,10 +113,10 @@ export async function searchPubMed(
       }
       out.push({ pmid, title, journal, year, authors });
     }
-    return out;
+    return { results: out, total };
   } catch (err) {
     console.error("[pubmed] searchPubMed threw:", err);
-    return [];
+    return empty;
   }
 }
 

@@ -4,23 +4,43 @@ import { searchPubMed } from "@/lib/pubmed";
 import { Tile } from "@/app/components/Tile";
 import { PubmedTile } from "@/app/components/PubmedTile";
 
+const PAGE_SIZE = 10;
+const MAX_PAGE = 50; // 500 PubMed results — generous ceiling, abuse guard
+
 type Props = {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; p?: string }>;
 };
 
+function parsePage(raw: string | undefined): number {
+  if (!raw) return 1;
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 1) return 1;
+  if (n > MAX_PAGE) return MAX_PAGE;
+  return n;
+}
+
 export default async function ExplorePage({ searchParams }: Props) {
-  const { q } = await searchParams;
+  const { q, p } = await searchParams;
   const query = q?.trim() ?? "";
   const isSearch = query.length > 0;
+  const page = parsePage(p);
+  const pubmedLimit = page * PAGE_SIZE;
 
-  const [libraryTiles, pubmedResults] = await Promise.all([
+  const [libraryTiles, pubmedSearch] = await Promise.all([
     isSearch ? searchCards(query) : recentCards(),
-    isSearch ? searchPubMed(query, 10) : Promise.resolve([]),
+    isSearch
+      ? searchPubMed(query, pubmedLimit)
+      : Promise.resolve({ results: [], total: 0 }),
   ]);
 
+  const pubmedResults = pubmedSearch.results;
+  const pubmedTotal = pubmedSearch.total;
   const hasLibrary = libraryTiles.length > 0;
   const hasPubmed = pubmedResults.length > 0;
   const hasAnything = hasLibrary || hasPubmed;
+  const hasMore =
+    isSearch && pubmedResults.length < pubmedTotal && page < MAX_PAGE;
+  const moreHref = `/explore?q=${encodeURIComponent(query)}&p=${page + 1}#pubmed`;
 
   return (
     <main className="mx-auto w-full max-w-2xl px-5 py-10 sm:px-6 sm:py-16">
@@ -65,10 +85,15 @@ export default async function ExplorePage({ searchParams }: Props) {
       )}
 
       {hasPubmed && (
-        <section>
-          <h2 className="mb-3 text-xs font-semibold tracking-wider text-ink/60 uppercase">
-            Live from PubMed
-          </h2>
+        <section id="pubmed">
+          <div className="mb-3 flex items-baseline justify-between gap-2">
+            <h2 className="text-xs font-semibold tracking-wider text-ink/60 uppercase">
+              Live from PubMed
+            </h2>
+            <span className="text-xs tabular-nums text-ink/50">
+              {pubmedResults.length} of {pubmedTotal.toLocaleString()}
+            </span>
+          </div>
           <ul className="space-y-4">
             {pubmedResults.map((result) => (
               <li key={result.pmid}>
@@ -76,6 +101,16 @@ export default async function ExplorePage({ searchParams }: Props) {
               </li>
             ))}
           </ul>
+          {hasMore && (
+            <div className="mt-4 text-center">
+              <Link
+                href={moreHref}
+                className="inline-block rounded-xl border border-primary bg-white px-5 py-2.5 text-sm font-medium text-primary transition hover:bg-primary/5"
+              >
+                Show more studies
+              </Link>
+            </div>
+          )}
         </section>
       )}
 
