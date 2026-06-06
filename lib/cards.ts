@@ -284,6 +284,126 @@ function rowToTile(row: unknown): CardTile | null {
 }
 
 /**
+ * Card shape used by the Play (Frisk-or-Trust) game. Carries the full
+ * score_card so the reveal can show band, verdict, and red-flag info
+ * without a second round trip.
+ */
+export type PlayCard = EngineOutput & { study_key: string };
+
+const STACK_SIZE = 10;
+const RANDOM_SAMPLE_SIZE = 50;
+
+/**
+ * Fetch a play stack. With `topic`, filters case-insensitively. Without,
+ * samples the 50 most-recent cards and shuffles to 10 (Postgres ORDER BY
+ * RANDOM() isn't expressible via PostgREST without an RPC).
+ *
+ * **Intentionally bypasses SERVE_CACHED_CARDS** — Play is the game *on top
+ * of* the library; gating it on the demo flag would break the feature.
+ * Returns [] on any error.
+ */
+export async function getStack(topic?: string): Promise<PlayCard[]> {
+  try {
+    const supabase = createSupabaseServiceClient();
+    const trimmed = topic?.trim();
+
+    if (trimmed) {
+      const { data, error } = await supabase
+        .from("cards")
+        .select("study_key, title, topic, summary, score_card")
+        .ilike("topic", trimmed)
+        .order("last_verified_at", { ascending: false })
+        .limit(STACK_SIZE);
+
+      if (error) {
+        console.error("[cards] getStack(topic) error:", error);
+        return [];
+      }
+      return (data ?? [])
+        .map(rowToPlayCard)
+        .filter((c): c is PlayCard => c !== null);
+    }
+
+    const { data, error } = await supabase
+      .from("cards")
+      .select("study_key, title, topic, summary, score_card")
+      .order("last_verified_at", { ascending: false })
+      .limit(RANDOM_SAMPLE_SIZE);
+
+    if (error) {
+      console.error("[cards] getStack() error:", error);
+      return [];
+    }
+
+    const cards = (data ?? [])
+      .map(rowToPlayCard)
+      .filter((c): c is PlayCard => c !== null);
+
+    // Fisher-Yates shuffle.
+    for (let i = cards.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [cards[i], cards[j]] = [cards[j], cards[i]];
+    }
+
+    return cards.slice(0, STACK_SIZE);
+  } catch (err) {
+    console.error("[cards] getStack threw:", err);
+    return [];
+  }
+}
+
+/**
+ * Distinct topics across the cards table, sorted alphabetically, with
+ * case-insensitive dedupe preserving each topic's first-seen casing.
+ * Bypasses SERVE_CACHED_CARDS for the same reason as getStack.
+ */
+export async function getTopics(): Promise<string[]> {
+  try {
+    const supabase = createSupabaseServiceClient();
+    const { data, error } = await supabase.from("cards").select("topic").limit(200);
+
+    if (error) {
+      console.error("[cards] getTopics error:", error);
+      return [];
+    }
+
+    const seen = new Map<string, string>();
+    for (const row of data ?? []) {
+      const t = (row as { topic?: unknown }).topic;
+      if (typeof t === "string") {
+        const trimmed = t.trim();
+        if (!trimmed) continue;
+        const key = trimmed.toLowerCase();
+        if (!seen.has(key)) seen.set(key, trimmed);
+      }
+    }
+    return Array.from(seen.values()).sort((a, b) => a.localeCompare(b));
+  } catch (err) {
+    console.error("[cards] getTopics threw:", err);
+    return [];
+  }
+}
+
+function rowToPlayCard(row: unknown): PlayCard | null {
+  if (!row || typeof row !== "object") return null;
+  const r = row as Record<string, unknown>;
+  if (typeof r.study_key !== "string") return null;
+  if (typeof r.title !== "string") return null;
+  if (typeof r.topic !== "string") return null;
+  if (!r.summary || typeof r.summary !== "object") return null;
+  const tldr = (r.summary as Record<string, unknown>).tldr;
+  if (typeof tldr !== "string") return null;
+  if (!r.score_card || typeof r.score_card !== "object") return null;
+  return {
+    study_key: r.study_key,
+    title: r.title,
+    topic: r.topic,
+    summary: { tldr },
+    score_card: r.score_card as ScoreCard,
+  };
+}
+
+/**
  * Upsert a card keyed on study_key. Bumps last_verified_at to now on
  * conflict; created_at is preserved by the database.
  */
