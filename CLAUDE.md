@@ -5,29 +5,37 @@ StudyFrisker grades how trustworthy health science is and surfaces who profits f
 ## Status today (June 6, 2026 — hackathon day)
 
 ### Shipped
-- **Mode A**: paste a study → server-side Anthropic call → structured score card → cached in Supabase. Includes the full 8-dimension breakdown.
+
+- **Mode A (Frisk)**: paste study text, abstract or a one-line claim (min 15 chars, down from 50 so short claims work) → server-side Claude call → structured score card → cached in Supabase. Full 8-dimension breakdown.
+- **Frisk input-mode pills**: row above the form. "Text" active (free), "DOI" / "URL" / "Claim Analysis" Pro-locked. Locked pills show a lock icon for free users and route to `/settings#pro`. Pro users see them unlocked but they still route to `/settings#pro` (the underlying features are "Coming soon" — listed in Settings but not implemented).
 - **4-tab IA** with a fixed bottom nav: Explore (default), Play, Frisk, Settings.
-- **Explore**: search the cached card library by title or topic. Tile list with two action buttons per tile (Frisk, Play).
-- **PubMed live search**: same Explore query also hits NCBI E-utilities and renders a second tile section ("Live from PubMed"). Each PubMed tile shows title + journal + year + authors and a one-click Frisk button.
-- **Frisk-by-study_key**: `/frisk?study_key=<sha256>` renders a library card directly with no form. Falls through to the form when the key isn't cached.
-- **Frisk-by-PubMed-ID**: `/frisk?pubmed_id=<pmid>` fetches the abstract via efetch, hashes it to a study_key, and either renders the cached card (hit) or runs a live frisk + caches it (miss). `loading.tsx` covers the 10–20 s slow path.
-- **Settings**: app section + working Mollie test-mode Pro upgrade (€9.99 one-off). Cookie-based Pro state (`studyfrisker_pro=1`, httpOnly, 7 days), set after `/upgrade/return` verifies a `paid` status server-side via `mollie.payments.get(id)`. Test mode means no real money — the judge picks "Paid" on Mollie's hosted page and lands on Settings with Pro unlocked. Success/canceled/error banners drive UX off `?upgrade=…` search param.
-- **Pro-gated Play categories**: Random + Vitamin D are free; the seven other curated pills (Diet, Exercise, Statins, Intermittent fasting, Probiotics, Caffeine, Magnesium) render with a lock icon for non-Pro users and route to `/settings#pro`. The Pro gate is also enforced server-side in `nextPubMedCard` so a typed-in `/play?topic=Statins` URL can't bypass it.
+- **Explore**: always-populated landing. Random topic picker pulls 10 PubMed cards on load (no empty state). Search mixes the Supabase library (cached tiles) with live PubMed (live tiles) in parallel.
+- **PubMed live search**: NCBI E-utilities (`esearch` + `esummary` + `efetch`). Each PubMed tile shows title + journal + year + authors and a Frisk-it link.
+- **"Show more studies" Pro-gated pagination** in Explore. Always visible to free users as an upsell cue; unlocked for Pro users when there's actually more to load. Server-side clamps `?p=N` to 1 for non-Pro.
+- **Frisk-by-study_key**: `/frisk?study_key=<sha256>` renders a library card directly.
+- **Frisk-by-PubMed-ID**: `/frisk?pubmed_id=<pmid>` fetches the abstract via efetch, hashes it, checks cache; cache miss hands the abstract to `AutoFriskClient` which auto-submits the existing `friskAction` Server Action so the slow Claude call can't time out the page's RSC stream.
+- **Play (Frisk or Trust)**: infinite TikTok-style live PubMed feed. 3-deep client-side queue (3 parallel fetches on mount, refills back to 3 after every swipe). Topic pills: Random + Vitamin D free; Diet/Exercise/Statins/IF/Probiotics/Caffeine/Magnesium Pro-locked. Trust vs Junk swipe reveals the band-colored score chip, verdict, ✓/✗ match indicator, and a clickable PubMed link.
+- **Summary vs score card UX**: `Tile` (library preview) hides the score and band — it's a discovery card. `ScoreCardView` (the full reveal after clicking Frisk) shows everything: score, band, verdict, callouts, dimensions, "View this study on PubMed ↗".
+- **"View on PubMed" link** on score cards when PMID is known (frisk-by-pubmed_id path + Play reveal). Cards reached via `?study_key=` don't have the link — the cards table has no `pmid` column. Follow-up.
+- **Settings** with working Mollie test-mode Pro upgrade (€9.99 one-off). Cookie-based Pro state (`studyfrisker_pro=1`, httpOnly, 7 days), set after `/upgrade/return` verifies a `paid` status server-side via `mollie.payments.get(id)`. Test mode means no real money — judges pick "Paid" on Mollie's hosted page. Success/canceled/error banners off `?upgrade=…` search param. Pro section lists 9 features (Multiple Studies Claim Analysis first, since it's the headline Pro pitch).
+- **Pro gating server-side**: `app/play/actions.ts` `nextPubMedCard` and `app/explore/page.tsx` both check `isProUser()` and reject locked content. Hand-typed URLs (`/play?topic=Statins`, `/explore?q=…&p=5`) can't bypass the UI locks.
 - **Theme**: beige `#F6F0E2` background, deep green `#166534` primary, accent green `#2E9E5B` (brighter, for Solid signalling), deep green-near-black ink `#0F2A1A` text. Light mode only.
+- **SERVE_CACHED_CARDS flag** at the top of `lib/cards.ts` lets the cache reads be turned off for an "everything live" demo phase without touching anything else. Currently `true`.
 
-### Stubbed
-- **Play tab**: shows the topic selector chrome and (when handed a `?study_key=`) the title of the card you "would play". No actual swipe game logic.
-- **Pro upgrade**: button is disabled, no Mollie wiring.
+### Not built (roadmap)
 
-### Not built
-- **Mode B** (claim → for/against synthesis with curated studies).
-- The **Frisk or Trust swipe game** itself.
-- **Resend PDF email** for a frisk report.
+- **Multiple Studies Claim Analysis** (the Mode B flagship Pro feature) — paste a claim → PubMed esearch → frisk N studies in parallel → synthesize stance + confidence + what's-missing.
+- **Frisk by DOI / Frisk by URL** — pills exist as upsell hooks, no DOI resolver / URL parser yet.
+- **Watchlist** — needs Supabase auth.
+- **PDF email report** via Resend (Resend already in `lib/resend.ts`, unused).
+- **Bulk-frisk a reading list**.
 - **Auth + saved library** via Supabase.
-- **Weighted overall score**: the original spec called for fixed weights per dimension (20/15/15/15/10/10/10/5). The current engine produces `overall_score` by Claude's judgment, not by weighted mean.
-- **`framing_readout` field**: spec'd in the original output JSON; not produced by the current engine.
-- **JSON retry-once on malformed**: structured outputs (`output_config.format`) enforce the schema, so a single live failure is the only failure mode today. No retry loop.
-- **"Shaky" band**: original spec had Solid 80+ / Mixed 60+ / Shaky 40+ / Junk 0–39. We shipped Solid 75+ / Mixed 50+ / **Weak** 25+ / Junk 0–24.
+- **Mollie webhook** verification (today we only verify on the redirect-back).
+- **`pmid` column on the cards table** so library-tile-clicked score cards can also link back to PubMed.
+- **Weighted overall score** — spec called for fixed dimension weights (20/15/15/15/10/10/10/5); current engine uses Claude's judgment.
+- **`framing_readout` field** — spec'd in the original output JSON; not produced.
+- **JSON retry-once on malformed** — structured outputs cover most cases.
+- **"Shaky" band** — spec had Solid 80+ / Mixed 60+ / Shaky 40+ / Junk 0–39; we shipped Solid 75 / Mixed 50 / Weak 25 / Junk 0–24.
 
 ## Architecture
 
@@ -39,27 +47,44 @@ app/
 ├── actions.ts               "use server" — friskAction (server action driving Mode A)
 ├── components/
 │   ├── TabBar.tsx           fixed bottom nav, inline-SVG icons
-│   ├── Tile.tsx             library tile (Frisk + Play action links)
-│   ├── PubmedTile.tsx       PubMed result tile (Frisk-it link)
+│   ├── Tile.tsx             library SUMMARY card (no score — preview only)
+│   ├── PubmedTile.tsx       live PubMed result tile (Frisk-it link)
 │   ├── FriskForm.tsx        client form using React 19 useActionState
-│   └── ScoreCardView.tsx    pure presentational result card
-├── explore/page.tsx         search form + tile list (server, reads ?q=);
-│                            queries library + PubMed in parallel
-├── play/page.tsx            stub topic selector (server, reads ?study_key=)
-├── frisk/page.tsx           form OR cached card by ?study_key= OR
-│                            fetch+frisk by ?pubmed_id= (server)
-├── frisk/loading.tsx        spinner shown during the PubMed slow path
-└── settings/page.tsx        app info + Pro upsell
+│   ├── AutoFriskClient.tsx  client auto-submit for /frisk?pubmed_id=
+│   │                        (decouples slow Claude calls from RSC stream)
+│   ├── PlayClient.tsx       the infinite Play feed (queue + swipe game)
+│   ├── ScoreCardView.tsx    the full SCORE card (the reveal)
+│   └── band-styles.ts       shared BAND_STYLES + dimensionBarColor
+├── explore/page.tsx         random-topic landing + search; library + PubMed
+│                            in parallel; Pro-gated Show More
+├── play/
+│   ├── page.tsx             reads isProUser, keys PlayClient by topic
+│   └── actions.ts           "use server" — nextPubMedCard (esearch random
+│                            offset → efetch → friskStudy → saveCard)
+├── frisk/
+│   ├── page.tsx             form (with input-mode pills) OR cached card
+│   │                        by ?study_key= OR fetch+frisk by ?pubmed_id=
+│   └── loading.tsx          spinner during navigation
+├── settings/page.tsx        app info + working Mollie Pro upgrade
+└── upgrade/
+    ├── actions.ts           "use server" — startUpgrade Server Action
+    └── return/route.ts      GET handler verifies Mollie status, sets cookie
 
 lib/
-├── anthropic.ts             getAnthropicClient() + callModel() (generic helper)
+├── anthropic.ts             getAnthropicClient() + callModel() (generic)
 ├── scoring.ts               friskStudy(), types, JSON schema, bandForScore()
-├── cards.ts                 getCachedCard (60-day-gated), getCardByStudyKey
-│                            (ungated), searchCards, recentCards, saveCard,
-│                            normalizeStudyKey (sha256)
+├── cards.ts                 SERVE_CACHED_CARDS toggle, getCachedCard,
+│                            getCardByStudyKey, searchCards, recentCards,
+│                            saveCard, normalizeStudyKey
 ├── pubmed.ts                searchPubMed (esearch + esummary),
+│                            searchPubMedIds (bare ids for Play action),
 │                            fetchPubMedAbstract (efetch plain text)
-└── supabase.ts              createSupabaseServiceClient (service-role)
+├── play.ts                  LiveCard type, RANDOM_TOPIC_POOL, CURATED_TOPICS
+├── supabase.ts              createSupabaseServiceClient (service-role)
+├── mollie.ts                createTestPayment + getPayment
+├── upgrade.ts               isProUser, setProCookie, isLockedTopic,
+│                            FREE_PLAY_TOPICS
+└── resend.ts                sendReport (scaffolded, unused)
 ```
 
 ## Stack
@@ -156,13 +181,17 @@ The current engine prompt encodes a weaker version of this (it says "label infer
 ## Roadmap (cut from the bottom if time runs short)
 
 1. ✅ **Mode A** end-to-end. Paste, frisk, render the card.
-2. ✅ **4-tab IA** with Explore (search) and Settings.
-3. ⬜ **Mode B** for one curated claim: 4–6 real studies pre-cached in Supabase, then a synthesized verdict (stance, confidence, what-is-missing).
-4. ⬜ **Frisk or Trust swipe game** using the cached cards. Wire up the Play tab.
-5. ✅ **Mollie test checkout** for Pro (cookie-based state, redirect-only verification; webhook is the production hardening step).
-6. ⬜ **Resend PDF email** of any frisk.
-7. ⬜ **Supabase auth + saved library**.
-8. ⬜ **Claim-mode synthesis on top of PubMed** — discover step is live (Explore + `/frisk?pubmed_id=`); what's missing is a wrapper that grabs the top N PubMed hits for a claim, frisks them in parallel, and synthesizes the for-and-against verdict (this is the Mode B intersection with PubMed).
+2. ✅ **4-tab IA** with Explore (default), Play, Frisk, Settings.
+3. ✅ **Live PubMed search** in Explore + Frisk-by-PMID.
+4. ✅ **Frisk or Trust swipe game** — Play tab is a live PubMed infinite feed.
+5. ✅ **Mollie test checkout** for Pro (cookie-based state, redirect-only verification).
+6. ✅ **Pro gating** on Play categories + Explore pagination (both client + server).
+7. ⬜ **Multiple Studies Claim Analysis (Mode B)** — paste a claim → PubMed esearch → frisk N studies in parallel → synthesize stance + confidence + what's-missing. Headline Pro feature, not yet built.
+8. ⬜ **Frisk by DOI / Frisk by URL** — pills exist, resolvers don't.
+9. ⬜ **Resend PDF email** of any frisk.
+10. ⬜ **Supabase auth + saved library / watchlist**.
+11. ⬜ **Bulk-frisk a reading list**.
+12. ⬜ **Mollie webhook** for production-grade payment verification.
 
 Engine corrections that should land before any new feature work:
 
@@ -193,8 +222,12 @@ Live single-study frisk first to prove it's real-time. Then open the cached one-
 
 ## Env vars
 
-Required: `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
+Required for the core flow: `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
 
-Optional (scaffolded, not yet used): `MOLLIE_API_KEY`, `RESEND_API_KEY`, `NCBI_API_KEY`.
+Required for the Pro upgrade: `MOLLIE_API_KEY` (test_… key — works without real money in Mollie test mode).
+
+Optional, raises PubMed rate limit 3 → 10 req/s: `NCBI_API_KEY`.
+
+Scaffolded but unused yet (the future PDF report Pro feature): `RESEND_API_KEY`.
 
 `.env.local` (local dev) and Netlify environment variables (production) are separate — changes to one don't propagate to the other. Netlify needs a rebuild after env var changes.
