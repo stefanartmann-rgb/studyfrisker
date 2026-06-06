@@ -8,7 +8,9 @@ StudyFrisker grades how trustworthy health science is and surfaces who profits f
 - **Mode A**: paste a study → server-side Anthropic call → structured score card → cached in Supabase. Includes the full 8-dimension breakdown.
 - **4-tab IA** with a fixed bottom nav: Explore (default), Play, Frisk, Settings.
 - **Explore**: search the cached card library by title or topic. Tile list with two action buttons per tile (Frisk, Play).
+- **PubMed live search**: same Explore query also hits NCBI E-utilities and renders a second tile section ("Live from PubMed"). Each PubMed tile shows title + journal + year + authors and a one-click Frisk button.
 - **Frisk-by-study_key**: `/frisk?study_key=<sha256>` renders a library card directly with no form. Falls through to the form when the key isn't cached.
+- **Frisk-by-PubMed-ID**: `/frisk?pubmed_id=<pmid>` fetches the abstract via efetch, hashes it to a study_key, and either renders the cached card (hit) or runs a live frisk + caches it (miss). `loading.tsx` covers the 10–20 s slow path.
 - **Settings**: app section + Pro section with a disabled Upgrade button placeholder.
 - **Theme**: beige `#F6F0E2` background, vivid blue `#2348C9` primary, accent green `#2E9E5B`, deep blue ink `#1A2B5C` text. Light mode only.
 
@@ -21,7 +23,6 @@ StudyFrisker grades how trustworthy health science is and surfaces who profits f
 - The **Frisk or Trust swipe game** itself.
 - **Resend PDF email** for a frisk report.
 - **Auth + saved library** via Supabase.
-- **PubMed E-utilities integration** (NCBI_API_KEY is in env scaffolding but unused).
 - **Weighted overall score**: the original spec called for fixed weights per dimension (20/15/15/15/10/10/10/5). The current engine produces `overall_score` by Claude's judgment, not by weighted mean.
 - **`framing_readout` field**: spec'd in the original output JSON; not produced by the current engine.
 - **JSON retry-once on malformed**: structured outputs (`output_config.format`) enforce the schema, so a single live failure is the only failure mode today. No retry loop.
@@ -37,12 +38,16 @@ app/
 ├── actions.ts               "use server" — friskAction (server action driving Mode A)
 ├── components/
 │   ├── TabBar.tsx           fixed bottom nav, inline-SVG icons
-│   ├── Tile.tsx             Explore result tile (Frisk + Play action links)
+│   ├── Tile.tsx             library tile (Frisk + Play action links)
+│   ├── PubmedTile.tsx       PubMed result tile (Frisk-it link)
 │   ├── FriskForm.tsx        client form using React 19 useActionState
 │   └── ScoreCardView.tsx    pure presentational result card
-├── explore/page.tsx         search form + tile list (server, reads ?q=)
+├── explore/page.tsx         search form + tile list (server, reads ?q=);
+│                            queries library + PubMed in parallel
 ├── play/page.tsx            stub topic selector (server, reads ?study_key=)
-├── frisk/page.tsx           form OR cached card by ?study_key= (server)
+├── frisk/page.tsx           form OR cached card by ?study_key= OR
+│                            fetch+frisk by ?pubmed_id= (server)
+├── frisk/loading.tsx        spinner shown during the PubMed slow path
 └── settings/page.tsx        app info + Pro upsell
 
 lib/
@@ -51,6 +56,8 @@ lib/
 ├── cards.ts                 getCachedCard (60-day-gated), getCardByStudyKey
 │                            (ungated), searchCards, recentCards, saveCard,
 │                            normalizeStudyKey (sha256)
+├── pubmed.ts                searchPubMed (esearch + esummary),
+│                            fetchPubMedAbstract (efetch plain text)
 └── supabase.ts              createSupabaseServiceClient (service-role)
 ```
 
@@ -63,7 +70,7 @@ lib/
 - Mollie test mode planned for Pro checkout (not wired).
 - Resend planned for the emailed PDF report (not wired).
 - Netlify for hosting. Auto-deploys from `main`.
-- PubMed E-utilities scaffolded (env var present) but no integration yet.
+- PubMed E-utilities (NCBI) for live study search in Explore and abstract fetch in the Frisk-by-PMID flow. `NCBI_API_KEY` env var raises the rate limit (3 → 10 req/s) but isn't required to call the public endpoint.
 
 ## Engine: what the frisk produces
 
@@ -154,7 +161,7 @@ The current engine prompt encodes a weaker version of this (it says "label infer
 5. ⬜ **Mollie test checkout** for Pro. Wire up the Settings button.
 6. ⬜ **Resend PDF email** of any frisk.
 7. ⬜ **Supabase auth + saved library**.
-8. ⬜ **Open-ended claim via live PubMed search** (slowest, riskiest — last).
+8. ⬜ **Claim-mode synthesis on top of PubMed** — discover step is live (Explore + `/frisk?pubmed_id=`); what's missing is a wrapper that grabs the top N PubMed hits for a claim, frisks them in parallel, and synthesizes the for-and-against verdict (this is the Mode B intersection with PubMed).
 
 Engine corrections that should land before any new feature work:
 

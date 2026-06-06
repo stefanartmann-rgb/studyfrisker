@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { recentCards, searchCards } from "@/lib/cards";
+import { searchPubMed } from "@/lib/pubmed";
 import { Tile } from "@/app/components/Tile";
+import { PubmedTile } from "@/app/components/PubmedTile";
 
 type Props = {
   searchParams: Promise<{ q?: string }>;
@@ -10,7 +12,15 @@ export default async function ExplorePage({ searchParams }: Props) {
   const { q } = await searchParams;
   const query = q?.trim() ?? "";
   const isSearch = query.length > 0;
-  const tiles = isSearch ? await searchCards(query) : await recentCards();
+
+  const [libraryTiles, pubmedResults] = await Promise.all([
+    isSearch ? searchCards(query) : recentCards(),
+    isSearch ? searchPubMed(query, 10) : Promise.resolve([]),
+  ]);
+
+  const hasLibrary = libraryTiles.length > 0;
+  const hasPubmed = pubmedResults.length > 0;
+  const hasAnything = hasLibrary || hasPubmed;
 
   return (
     <main className="mx-auto w-full max-w-2xl px-5 py-10 sm:px-6 sm:py-16">
@@ -19,7 +29,7 @@ export default async function ExplorePage({ searchParams }: Props) {
           Explore
         </h1>
         <p className="text-sm text-ink/70 sm:text-base">
-          Find studies and claims in the frisk library.
+          Search your frisk library and PubMed live.
         </p>
       </header>
 
@@ -39,26 +49,45 @@ export default async function ExplorePage({ searchParams }: Props) {
         </button>
       </form>
 
-      {tiles.length > 0 ? (
-        <>
+      {hasLibrary && (
+        <section className="mb-8">
           <h2 className="mb-3 text-xs font-semibold tracking-wider text-ink/60 uppercase">
-            {isSearch ? `Results for “${query}”` : "Recent"}
+            {isSearch ? "From your library" : "Recent"}
           </h2>
           <ul className="space-y-4">
-            {tiles.map((tile) => (
+            {libraryTiles.map((tile) => (
               <li key={tile.study_key}>
                 <Tile tile={tile} />
               </li>
             ))}
           </ul>
-        </>
-      ) : isSearch ? (
+        </section>
+      )}
+
+      {hasPubmed && (
+        <section>
+          <h2 className="mb-3 text-xs font-semibold tracking-wider text-ink/60 uppercase">
+            Live from PubMed
+          </h2>
+          <ul className="space-y-4">
+            {pubmedResults.map((result) => (
+              <li key={result.pmid}>
+                <PubmedTile result={result} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {!hasAnything && isSearch && (
         <div className="rounded-2xl border border-ink/10 bg-white p-6 text-center">
           <p className="text-sm text-ink/70">
             No matches for &ldquo;{query}&rdquo;. Try a different search.
           </p>
         </div>
-      ) : (
+      )}
+
+      {!hasAnything && !isSearch && (
         <div className="rounded-2xl border border-ink/10 bg-white p-8 text-center">
           <p className="text-sm text-ink/70">
             No cards yet. Start by frisking a study.
