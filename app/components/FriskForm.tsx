@@ -24,17 +24,17 @@ export function FriskForm() {
           minLength={50}
           rows={6}
           placeholder="Paste a study reference, abstract, DOI, URL, or health claim…"
-          className="w-full resize-y rounded-lg border border-gray-300 bg-white p-4 text-sm leading-relaxed shadow-sm focus:border-gray-500 focus:outline-none disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900"
+          className="w-full resize-y rounded-xl border border-ink/15 bg-white p-4 text-sm leading-relaxed text-ink shadow-sm placeholder:text-ink/40 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
           disabled={pending}
         />
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-gray-500 dark:text-gray-400">
+          <p className="text-xs text-ink/60">
             Min 50 characters. Scored live, not from a list.
           </p>
           <button
             type="submit"
             disabled={pending}
-            className="rounded-lg bg-black px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-gray-200"
+            className="rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {pending ? "Frisking…" : "Frisk it"}
           </button>
@@ -44,7 +44,7 @@ export function FriskForm() {
       {state.status === "error" && (
         <div
           role="alert"
-          className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300"
+          className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
         >
           {state.message}
         </div>

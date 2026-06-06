@@ -7,39 +7,32 @@ type Props = {
 
 const BAND_STYLES: Record<
   Band,
-  { badge: string; border: string; score: string; bar: string }
+  { badge: string; border: string; score: string }
 > = {
   Solid: {
-    badge:
-      "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
-    border: "border-green-200 dark:border-green-900",
-    score: "text-green-700 dark:text-green-400",
-    bar: "bg-green-500",
+    badge: "bg-accent text-white",
+    border: "border-accent/30",
+    score: "text-accent",
   },
   Mixed: {
-    badge:
-      "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-    border: "border-amber-200 dark:border-amber-900",
-    score: "text-amber-700 dark:text-amber-400",
-    bar: "bg-amber-500",
+    badge: "bg-amber-100 text-amber-800",
+    border: "border-amber-200",
+    score: "text-amber-700",
   },
   Weak: {
-    badge:
-      "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300",
-    border: "border-orange-200 dark:border-orange-900",
-    score: "text-orange-700 dark:text-orange-400",
-    bar: "bg-orange-500",
+    badge: "bg-orange-100 text-orange-800",
+    border: "border-orange-200",
+    score: "text-orange-700",
   },
   Junk: {
-    badge: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
-    border: "border-red-200 dark:border-red-900",
-    score: "text-red-700 dark:text-red-400",
-    bar: "bg-red-500",
+    badge: "bg-red-100 text-red-800",
+    border: "border-red-200",
+    score: "text-red-700",
   },
 };
 
 function dimensionBarColor(score: number): string {
-  if (score >= 75) return "bg-green-500";
+  if (score >= 75) return "bg-accent";
   if (score >= 50) return "bg-amber-500";
   if (score >= 25) return "bg-orange-500";
   return "bg-red-500";
@@ -51,13 +44,13 @@ export function ScoreCardView({ card, cached }: Props) {
 
   return (
     <article
-      className={`rounded-2xl border ${styles.border} bg-white p-6 shadow-sm sm:p-8 dark:bg-gray-900`}
+      className={`rounded-2xl border bg-white p-6 shadow-sm sm:p-8 ${styles.border}`}
     >
       <header className="space-y-2">
-        <h2 className="text-xl leading-tight font-semibold sm:text-2xl">
+        <h2 className="text-xl leading-tight font-semibold text-ink sm:text-2xl">
           {title}
         </h2>
-        <span className="inline-block text-xs tracking-wider text-gray-500 uppercase dark:text-gray-400">
+        <span className="inline-block text-xs tracking-wider text-ink/60 uppercase">
           {topic}
         </span>
       </header>
@@ -74,15 +67,15 @@ export function ScoreCardView({ card, cached }: Props) {
           >
             {sc.band}
           </span>
-          <span className="text-xs text-gray-500 dark:text-gray-400">
-            Trust Score / 100
-          </span>
+          <span className="text-xs text-ink/60">Trust Score / 100</span>
         </div>
       </section>
 
-      <p className="mt-6 text-base leading-relaxed sm:text-lg">{sc.verdict}</p>
+      <p className="mt-6 text-base leading-relaxed text-ink sm:text-lg">
+        {sc.verdict}
+      </p>
 
-      <p className="mt-6 rounded-lg bg-gray-50 p-4 text-sm leading-relaxed text-gray-700 dark:bg-gray-800/50 dark:text-gray-300">
+      <p className="mt-6 rounded-xl bg-background p-4 text-sm leading-relaxed text-ink">
         {summary.tldr}
       </p>
 
@@ -92,36 +85,32 @@ export function ScoreCardView({ card, cached }: Props) {
       </div>
 
       <section className="mt-8 space-y-3">
-        <h3 className="text-sm font-semibold tracking-wider text-gray-500 uppercase dark:text-gray-400">
+        <h3 className="text-sm font-semibold tracking-wider text-ink/60 uppercase">
           How we scored it
         </h3>
         <ul className="space-y-4">
           {sc.dimensions.map((d) => (
             <li key={d.name} className="space-y-1.5">
               <div className="flex items-baseline justify-between gap-2">
-                <span className="text-sm font-medium">{d.name}</span>
-                <span className="text-sm tabular-nums text-gray-500 dark:text-gray-400">
+                <span className="text-sm font-medium text-ink">{d.name}</span>
+                <span className="text-sm tabular-nums text-ink/60">
                   {d.score}
                 </span>
               </div>
-              <div className="h-1 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+              <div className="h-1 w-full overflow-hidden rounded-full bg-ink/10">
                 <div
                   className={`h-full ${dimensionBarColor(d.score)}`}
                   style={{ width: `${d.score}%` }}
                 />
               </div>
-              <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-                {d.reason}
-              </p>
+              <p className="text-sm leading-relaxed text-ink/75">{d.reason}</p>
             </li>
           ))}
         </ul>
       </section>
 
       {cached && (
-        <footer className="mt-6 text-xs text-gray-400 dark:text-gray-500">
-          Served from cache
-        </footer>
+        <footer className="mt-6 text-xs text-ink/50">Served from cache</footer>
       )}
     </article>
   );
@@ -129,11 +118,11 @@ export function ScoreCardView({ card, cached }: Props) {
 
 function Callout({ label, body }: { label: string; body: string }) {
   return (
-    <div className="space-y-1 rounded-lg border border-gray-200 p-4 dark:border-gray-800">
-      <div className="text-xs font-semibold tracking-wider text-gray-500 uppercase dark:text-gray-400">
+    <div className="space-y-1 rounded-xl border border-ink/15 p-4">
+      <div className="text-xs font-semibold tracking-wider text-ink/60 uppercase">
         {label}
       </div>
-      <p className="text-sm leading-relaxed">{body}</p>
+      <p className="text-sm leading-relaxed text-ink">{body}</p>
     </div>
   );
 }

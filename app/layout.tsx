@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "studyfrisker",
-  description: "Generic Next.js starter",
+  title: "StudyFrisker",
+  description: "Grading how trustworthy health science really is.",
 };
 
 export default function RootLayout({
@@ -13,7 +13,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className="bg-background text-ink antialiased">{children}</body>
     </html>
   );
 }
