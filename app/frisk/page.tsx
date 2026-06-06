@@ -1,19 +1,12 @@
+import { AutoFriskClient } from "@/app/components/AutoFriskClient";
 import { FriskForm } from "@/app/components/FriskForm";
 import { ScoreCardView } from "@/app/components/ScoreCardView";
 import {
   getCachedCard,
   getCardByStudyKey,
   normalizeStudyKey,
-  saveCard,
 } from "@/lib/cards";
 import { fetchPubMedAbstract } from "@/lib/pubmed";
-import { friskStudy, type EngineOutput } from "@/lib/scoring";
-
-// Frisking a PubMed result can take 10–20s end-to-end (efetch + Claude call).
-// Bump the per-route max duration so Netlify functions don't kill the request
-// at the default 10s cap. Free-tier deployments may still cap below this; if
-// timeouts keep firing, swap to a client-side action.
-export const maxDuration = 30;
 
 type Props = {
   searchParams: Promise<{ study_key?: string; pubmed_id?: string }>;
@@ -22,7 +15,8 @@ type Props = {
 export default async function FriskPage({ searchParams }: Props) {
   const { study_key, pubmed_id } = await searchParams;
 
-  // Mode 1: ?pubmed_id=X — fetch abstract, frisk if not already cached, render.
+  // Mode 1: ?pubmed_id=X — fetch abstract, render cached card directly
+  // (fast path) or hand off to AutoFriskClient for the slow path.
   if (pubmed_id) {
     const abstract = await fetchPubMedAbstract(pubmed_id);
     if (!abstract) {
@@ -40,34 +34,23 @@ export default async function FriskPage({ searchParams }: Props) {
     }
 
     const studyKey = normalizeStudyKey(abstract);
-    let card: EngineOutput | null = await getCachedCard(studyKey);
-    let cached = card !== null;
-    if (!card) {
-      try {
-        card = await friskStudy(abstract);
-        await saveCard(studyKey, card);
-        cached = false;
-      } catch (err) {
-        console.error("[frisk/pubmed] friskStudy failed:", err);
-        return (
-          <FriskShell subhead="Frisking failed.">
-            <Alert tone="red">
-              We couldn&apos;t frisk this study. Try again, or paste it below
-              to frisk it manually.
-            </Alert>
-            <div className="mt-6">
-              <FriskForm />
-            </div>
-          </FriskShell>
-        );
-      }
+    const cached = await getCachedCard(studyKey);
+    if (cached) {
+      // Fast path: cached + fresh, render directly server-side.
+      return (
+        <FriskShell subhead="Score card from the library.">
+          <ScoreCardView card={cached} cached />
+        </FriskShell>
+      );
     }
 
+    // Slow path: hand off to the client. The client submits the friskAction
+    // Server Action, which runs the Anthropic call in its own request — not
+    // inside this page's streaming response — so a slow frisk can't corrupt
+    // the RSC stream and crash hydration.
     return (
-      <FriskShell
-        subhead={cached ? "Score card from the library." : "Fresh from PubMed."}
-      >
-        <ScoreCardView card={card} cached={cached} />
+      <FriskShell subhead="Fresh from PubMed.">
+        <AutoFriskClient abstract={abstract} />
       </FriskShell>
     );
   }
@@ -137,10 +120,7 @@ function Alert({
       ? "border-amber-200 bg-amber-50 text-amber-800"
       : "border-red-200 bg-red-50 text-red-800";
   return (
-    <div
-      role="alert"
-      className={`rounded-xl border p-4 text-sm ${styles}`}
-    >
+    <div role="alert" className={`rounded-xl border p-4 text-sm ${styles}`}>
       {children}
     </div>
   );
