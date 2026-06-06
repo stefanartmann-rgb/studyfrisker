@@ -50,10 +50,16 @@ export default async function ExplorePage({ searchParams }: Props) {
   const hasLibrary = libraryTiles.length > 0;
   const hasPubmed = pubmedResults.length > 0;
 
-  // Show More only applies when the user actually searched — the default
-  // random feed is a starter, not a paginated query result.
-  const moreAvailable =
-    isSearch && pubmedResults.length < pubmedTotal && requestedPage < MAX_PAGE;
+  // Pro pagination only makes sense when the user searched AND there are
+  // more results to load.
+  const proCanLoadMore =
+    isPro &&
+    isSearch &&
+    pubmedResults.length < pubmedTotal &&
+    requestedPage < MAX_PAGE;
+  // Non-Pro users always see the locked button (when PubMed returned
+  // something) — it's both an upsell and a discoverability cue.
+  const showLockedMore = !isPro && hasPubmed;
   const moreHref = isPro
     ? `/explore?q=${encodeURIComponent(userQuery)}&p=${page + 1}#pubmed`
     : "/settings#pro";
@@ -119,27 +125,27 @@ export default async function ExplorePage({ searchParams }: Props) {
               </li>
             ))}
           </ul>
-          {moreAvailable &&
-            (isPro ? (
-              <div className="mt-4 text-center">
-                <Link
-                  href={moreHref}
-                  className="inline-block rounded-xl border border-primary bg-white px-5 py-2.5 text-sm font-medium text-primary transition hover:bg-primary/5"
-                >
-                  Show more studies
-                </Link>
-              </div>
-            ) : (
-              <div className="mt-4 text-center">
-                <Link
-                  href={moreHref}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-ink/20 bg-white px-5 py-2.5 text-sm font-medium text-ink/60 transition hover:border-ink/40 hover:text-ink/80"
-                >
-                  <LockIcon />
-                  Show more studies — Pro
-                </Link>
-              </div>
-            ))}
+          {proCanLoadMore && (
+            <div className="mt-4 text-center">
+              <Link
+                href={moreHref}
+                className="inline-block rounded-xl border border-primary bg-white px-5 py-2.5 text-sm font-medium text-primary transition hover:bg-primary/5"
+              >
+                Show more studies
+              </Link>
+            </div>
+          )}
+          {showLockedMore && (
+            <div className="mt-4 text-center">
+              <Link
+                href={moreHref}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-ink/20 bg-white px-5 py-2.5 text-sm font-medium text-ink/60 transition hover:border-ink/40 hover:text-ink/80"
+              >
+                <LockIcon />
+                Show more studies — Pro
+              </Link>
+            </div>
+          )}
         </section>
       )}
 
