@@ -3,7 +3,7 @@ import { isProUser } from "@/lib/upgrade";
 
 const PRO_FEATURES: Array<{ headline: string; sub?: string }> = [
   {
-    headline: "Mode B claim analysis",
+    headline: "Multiple Studies Claim Analysis",
     sub: "Paste a claim, get a multi-study for-and-against verdict",
   },
   {
@@ -111,7 +111,8 @@ export default async function SettingsPage({ searchParams }: Props) {
           {isPro ? (
             <p className="mt-6 rounded-xl border border-accent/30 bg-accent/5 p-4 text-sm leading-relaxed text-ink">
               You&apos;re a Pro member. Topic categories on Play are unlocked.
-              Mode B and the other Pro features are next on the build list.
+              Multiple Studies Claim Analysis and the other Pro features are
+              next on the build list.
             </p>
           ) : (
             <form action={startUpgrade} className="mt-6">
@@ -128,8 +129,8 @@ export default async function SettingsPage({ searchParams }: Props) {
           )}
 
           <p className="mt-6 text-xs leading-relaxed text-ink/60">
-            In this demo, Pro unlocks Play topic categories. Mode B claim
-            analysis and the rest are on the roadmap — next commit.
+            In this demo, Pro unlocks Play topic categories. Multiple Studies
+            Claim Analysis and the rest are on the roadmap — next commit.
           </p>
         </div>
       </section>
