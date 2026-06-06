@@ -1,4 +1,5 @@
 import { PlayClient } from "@/app/components/PlayClient";
+import { isProUser } from "@/lib/upgrade";
 
 // Each nextPubMedCard server action does esearch + efetch + a full Claude
 // call. Bump the route's function budget so Netlify doesn't kill it at the
@@ -11,6 +12,7 @@ type Props = {
 
 export default async function PlayPage({ searchParams }: Props) {
   const { topic } = await searchParams;
+  const isPro = await isProUser();
 
   return (
     <main className="mx-auto w-full max-w-2xl px-5 py-10 sm:px-6 sm:py-16">
@@ -25,7 +27,11 @@ export default async function PlayPage({ searchParams }: Props) {
       </header>
 
       {/* Keyed on topic so switching the pill remounts and resets game state */}
-      <PlayClient key={topic ?? "random"} currentTopic={topic} />
+      <PlayClient
+        key={topic ?? "random"}
+        currentTopic={topic}
+        isPro={isPro}
+      />
     </main>
   );
 }

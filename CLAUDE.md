@@ -11,7 +11,8 @@ StudyFrisker grades how trustworthy health science is and surfaces who profits f
 - **PubMed live search**: same Explore query also hits NCBI E-utilities and renders a second tile section ("Live from PubMed"). Each PubMed tile shows title + journal + year + authors and a one-click Frisk button.
 - **Frisk-by-study_key**: `/frisk?study_key=<sha256>` renders a library card directly with no form. Falls through to the form when the key isn't cached.
 - **Frisk-by-PubMed-ID**: `/frisk?pubmed_id=<pmid>` fetches the abstract via efetch, hashes it to a study_key, and either renders the cached card (hit) or runs a live frisk + caches it (miss). `loading.tsx` covers the 10–20 s slow path.
-- **Settings**: app section + Pro section with a disabled Upgrade button placeholder.
+- **Settings**: app section + working Mollie test-mode Pro upgrade (€9.99 one-off). Cookie-based Pro state (`studyfrisker_pro=1`, httpOnly, 7 days), set after `/upgrade/return` verifies a `paid` status server-side via `mollie.payments.get(id)`. Test mode means no real money — the judge picks "Paid" on Mollie's hosted page and lands on Settings with Pro unlocked. Success/canceled/error banners drive UX off `?upgrade=…` search param.
+- **Pro-gated Play categories**: Random + Vitamin D are free; the seven other curated pills (Diet, Exercise, Statins, Intermittent fasting, Probiotics, Caffeine, Magnesium) render with a lock icon for non-Pro users and route to `/settings#pro`. The Pro gate is also enforced server-side in `nextPubMedCard` so a typed-in `/play?topic=Statins` URL can't bypass it.
 - **Theme**: beige `#F6F0E2` background, deep green `#166534` primary, accent green `#2E9E5B` (brighter, for Solid signalling), deep green-near-black ink `#0F2A1A` text. Light mode only.
 
 ### Stubbed
@@ -67,7 +68,7 @@ lib/
 - React 19 (useActionState for the form).
 - Supabase for the cached card library. Service-role client, server-side only.
 - Anthropic Messages API for the frisk. Model `claude-sonnet-4-6`, structured outputs via `output_config.format` (JSON schema).
-- Mollie test mode planned for Pro checkout (not wired).
+- Mollie test mode wired for the Pro checkout — `lib/mollie.ts` `createTestPayment` + `getPayment`, called from `app/upgrade/actions.ts` / `app/upgrade/return/route.ts`. `MOLLIE_API_KEY` must be set on Netlify too (same `test_…` key).
 - Resend planned for the emailed PDF report (not wired).
 - Netlify for hosting. Auto-deploys from `main`.
 - PubMed E-utilities (NCBI) for live study search in Explore and abstract fetch in the Frisk-by-PMID flow. `NCBI_API_KEY` env var raises the rate limit (3 → 10 req/s) but isn't required to call the public endpoint.
@@ -158,7 +159,7 @@ The current engine prompt encodes a weaker version of this (it says "label infer
 2. ✅ **4-tab IA** with Explore (search) and Settings.
 3. ⬜ **Mode B** for one curated claim: 4–6 real studies pre-cached in Supabase, then a synthesized verdict (stance, confidence, what-is-missing).
 4. ⬜ **Frisk or Trust swipe game** using the cached cards. Wire up the Play tab.
-5. ⬜ **Mollie test checkout** for Pro. Wire up the Settings button.
+5. ✅ **Mollie test checkout** for Pro (cookie-based state, redirect-only verification; webhook is the production hardening step).
 6. ⬜ **Resend PDF email** of any frisk.
 7. ⬜ **Supabase auth + saved library**.
 8. ⬜ **Claim-mode synthesis on top of PubMed** — discover step is live (Explore + `/frisk?pubmed_id=`); what's missing is a wrapper that grabs the top N PubMed hits for a claim, frisks them in parallel, and synthesizes the for-and-against verdict (this is the Mode B intersection with PubMed).

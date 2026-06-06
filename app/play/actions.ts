@@ -4,6 +4,7 @@ import { normalizeStudyKey, saveCard } from "@/lib/cards";
 import { RANDOM_TOPIC_POOL, type NextCardResult } from "@/lib/play";
 import { fetchPubMedAbstract, searchPubMedIds } from "@/lib/pubmed";
 import { friskStudy } from "@/lib/scoring";
+import { isLockedTopic, isProUser } from "@/lib/upgrade";
 
 /**
  * Pull one fresh PubMed-sourced card for the Play feed.
@@ -20,6 +21,15 @@ export async function nextPubMedCard(
   topic: string | undefined,
   seenPmids: string[],
 ): Promise<NextCardResult> {
+  // Server-side Pro gate so a typed-in URL like /play?topic=Statins can't
+  // bypass the UI's locked-pill rendering.
+  if (isLockedTopic(topic) && !(await isProUser())) {
+    return {
+      status: "error",
+      message: "This topic is Pro. Upgrade in Settings to unlock.",
+    };
+  }
+
   try {
     const trimmedTopic = topic?.trim();
     const query =

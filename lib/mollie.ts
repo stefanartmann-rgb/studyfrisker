@@ -49,3 +49,11 @@ export async function createTestPayment(
     redirectUrl: options.redirectUrl,
   });
 }
+
+/**
+ * Fetch a payment by id. Used by the upgrade-return route to verify the
+ * payment status server-side before flipping the Pro cookie.
+ */
+export async function getPayment(id: string): Promise<Payment> {
+  return getClient().payments.get(id);
+}

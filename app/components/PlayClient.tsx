@@ -13,9 +13,10 @@ const MAX_DUP_RETRIES = 3;
 
 type Props = {
   currentTopic?: string;
+  isPro: boolean;
 };
 
-export function PlayClient({ currentTopic }: Props) {
+export function PlayClient({ currentTopic, isPro }: Props) {
   const [queue, setQueue] = useState<LiveCard[]>([]);
   const [revealed, setRevealed] = useState(false);
   const [userChoice, setUserChoice] = useState<Choice | null>(null);
@@ -98,7 +99,7 @@ export function PlayClient({ currentTopic }: Props) {
 
   return (
     <div className="space-y-6">
-      <TopicPills currentTopic={currentTopic} />
+      <TopicPills currentTopic={currentTopic} isPro={isPro} />
 
       {(played > 0 || queue.length > 0 || current) && (
         <ProgressLine
@@ -134,19 +135,35 @@ export function PlayClient({ currentTopic }: Props) {
   );
 }
 
-function TopicPills({ currentTopic }: { currentTopic?: string }) {
+function TopicPills({
+  currentTopic,
+  isPro,
+}: {
+  currentTopic?: string;
+  isPro: boolean;
+}) {
   const current = currentTopic?.trim().toLowerCase();
   return (
     <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2">
       <Pill href="/play" label="Random" active={!current} />
-      {CURATED_TOPICS.map((t) => (
-        <Pill
-          key={t}
-          href={`/play?topic=${encodeURIComponent(t)}`}
-          label={t}
-          active={current === t.toLowerCase()}
-        />
-      ))}
+      {CURATED_TOPICS.map((t) => {
+        // Vitamin D is the only free curated pill; everything else is Pro.
+        const isFree = t.toLowerCase() === "vitamin d";
+        const locked = !isPro && !isFree;
+        return (
+          <Pill
+            key={t}
+            href={
+              locked
+                ? "/settings#pro"
+                : `/play?topic=${encodeURIComponent(t)}`
+            }
+            label={t}
+            active={!locked && current === t.toLowerCase()}
+            locked={locked}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -155,21 +172,45 @@ function Pill({
   href,
   label,
   active,
+  locked,
 }: {
   href: string;
   label: string;
   active: boolean;
+  locked?: boolean;
 }) {
-  const classes = active
-    ? "bg-primary text-primary-foreground"
-    : "border border-primary text-primary hover:bg-primary/5";
+  const classes = locked
+    ? "border border-ink/20 text-ink/40 hover:border-ink/40 hover:text-ink/60"
+    : active
+      ? "bg-primary text-primary-foreground"
+      : "border border-primary text-primary hover:bg-primary/5";
   return (
     <Link
       href={href}
-      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold tracking-wider uppercase transition ${classes}`}
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold tracking-wider uppercase transition ${classes}`}
     >
+      {locked && <LockIcon />}
       {label}
     </Link>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M9 11V7a3 3 0 0 1 6 0v4" />
+    </svg>
   );
 }
 
