@@ -1,5 +1,9 @@
-import { getStack, getTopics } from "@/lib/cards";
 import { PlayClient } from "@/app/components/PlayClient";
+
+// Each nextPubMedCard server action does esearch + efetch + a full Claude
+// call. Bump the route's function budget so Netlify doesn't kill it at the
+// default 10 s cap. Pro tier honours up to ~26 s.
+export const maxDuration = 30;
 
 type Props = {
   searchParams: Promise<{ topic?: string }>;
@@ -7,7 +11,6 @@ type Props = {
 
 export default async function PlayPage({ searchParams }: Props) {
   const { topic } = await searchParams;
-  const [stack, topics] = await Promise.all([getStack(topic), getTopics()]);
 
   return (
     <main className="mx-auto w-full max-w-2xl px-5 py-10 sm:px-6 sm:py-16">
@@ -16,12 +19,13 @@ export default async function PlayPage({ searchParams }: Props) {
           Play
         </h1>
         <p className="text-sm text-ink/70 sm:text-base">
-          Swipe through studies and call them Trust or Junk. See how your call
-          compares to the frisker.
+          Live feed of PubMed studies, frisked on the fly. Swipe Trust or
+          Junk and see how your call compares.
         </p>
       </header>
 
-      <PlayClient stack={stack} topics={topics} currentTopic={topic} />
+      {/* Keyed on topic so switching the pill remounts and resets game state */}
+      <PlayClient key={topic ?? "random"} currentTopic={topic} />
     </main>
   );
 }

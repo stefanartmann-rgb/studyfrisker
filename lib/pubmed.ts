@@ -121,6 +121,44 @@ export async function searchPubMed(
 }
 
 /**
+ * Bare esearch wrapper: return the PMID list for a query at an offset.
+ * Used by the Play live feed to sample around the result set without
+ * needing the heavier summary metadata that searchPubMed pulls.
+ *
+ * Returns [] on any failure.
+ */
+export async function searchPubMedIds(
+  query: string,
+  offset = 0,
+  limit = 20,
+): Promise<string[]> {
+  try {
+    const trimmed = query.trim();
+    if (!trimmed) return [];
+    const url = withApiKey(new URL(`${NCBI_BASE}/esearch.fcgi`));
+    url.searchParams.set("db", "pubmed");
+    url.searchParams.set("term", trimmed);
+    url.searchParams.set("retmax", String(limit));
+    url.searchParams.set("retstart", String(offset));
+    url.searchParams.set("retmode", "json");
+    url.searchParams.set("sort", "relevance");
+
+    const res = await fetch(url.toString(), { cache: "no-store" });
+    if (!res.ok) {
+      console.error("[pubmed] esearchIds HTTP", res.status);
+      return [];
+    }
+    const json = (await res.json()) as {
+      esearchresult?: { idlist?: string[] };
+    };
+    return json?.esearchresult?.idlist ?? [];
+  } catch (err) {
+    console.error("[pubmed] searchPubMedIds threw:", err);
+    return [];
+  }
+}
+
+/**
  * Fetch a PubMed record as plain-text abstract (rettype=abstract,
  * retmode=text). Returns the trimmed text or null on failure.
  *

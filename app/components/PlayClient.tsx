@@ -1,41 +1,145 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import type { PlayCard } from "@/lib/cards";
+import { useEffect, useRef, useState } from "react";
+import { nextPubMedCard } from "@/app/play/actions";
+import { CURATED_TOPICS, type LiveCard } from "@/lib/play";
 import { BAND_STYLES } from "./band-styles";
 
 type Choice = "trust" | "junk";
 
+const TARGET_QUEUE = 3;
+const MAX_DUP_RETRIES = 3;
+
 type Props = {
-  stack: PlayCard[];
-  topics: string[];
   currentTopic?: string;
 };
 
-export function PlayClient({ stack, topics, currentTopic }: Props) {
-  const stackKey = stack.map((c) => c.study_key).join("-") || "empty";
+export function PlayClient({ currentTopic }: Props) {
+  const [queue, setQueue] = useState<LiveCard[]>([]);
+  const [revealed, setRevealed] = useState(false);
+  const [userChoice, setUserChoice] = useState<Choice | null>(null);
+  const [matches, setMatches] = useState(0);
+  const [played, setPlayed] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [exhausted, setExhausted] = useState(false);
+  const seenRef = useRef<Set<string>>(new Set());
+  const fetchingCountRef = useRef(0);
+
+  // Keep the queue topped up. Fires on mount (3 parallel) and after every
+  // swipe (1 sequential refill).
+  useEffect(() => {
+    if (exhausted) return;
+    const needed =
+      TARGET_QUEUE - queue.length - fetchingCountRef.current;
+    for (let i = 0; i < needed; i++) {
+      void fetchOne();
+    }
+    // fetchOne is stable for our purposes — relies on refs + the captured
+    // currentTopic, which is fixed because PlayClient is keyed by topic
+    // in the parent.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queue.length, exhausted]);
+
+  async function fetchOne() {
+    if (exhausted) return;
+    fetchingCountRef.current += 1;
+    try {
+      for (let attempt = 0; attempt < MAX_DUP_RETRIES; attempt++) {
+        const result = await nextPubMedCard(
+          currentTopic,
+          Array.from(seenRef.current),
+        );
+        if (result.status === "exhausted") {
+          setExhausted(true);
+          return;
+        }
+        if (result.status === "error") {
+          setError(result.message);
+          return;
+        }
+        if (seenRef.current.has(result.card.pmid)) {
+          // Another in-flight fetch beat us to this PMID — retry.
+          continue;
+        }
+        seenRef.current.add(result.card.pmid);
+        setQueue((q) => [...q, result.card]);
+        setError(null);
+        return;
+      }
+    } finally {
+      fetchingCountRef.current -= 1;
+    }
+  }
+
+  function pick(choice: Choice) {
+    if (queue.length === 0 || revealed) return;
+    setUserChoice(choice);
+    setRevealed(true);
+  }
+
+  function next() {
+    if (queue.length === 0 || !revealed) return;
+    const current = queue[0];
+    const friskerSaidTrust =
+      current.score_card.band === "Solid" ||
+      current.score_card.band === "Mixed";
+    const userSaidTrust = userChoice === "trust";
+    if (friskerSaidTrust === userSaidTrust) {
+      setMatches((m) => m + 1);
+    }
+    setPlayed((p) => p + 1);
+    setQueue((q) => q.slice(1));
+    setRevealed(false);
+    setUserChoice(null);
+  }
+
+  const current: LiveCard | undefined = queue[0];
 
   return (
     <div className="space-y-6">
-      <TopicPills topics={topics} currentTopic={currentTopic} />
-      <Game key={stackKey} stack={stack} />
+      <TopicPills currentTopic={currentTopic} />
+
+      {(played > 0 || queue.length > 0 || current) && (
+        <ProgressLine
+          played={played}
+          matches={matches}
+          queueLength={queue.length}
+          fetching={fetchingCountRef.current > 0}
+        />
+      )}
+
+      {current ? (
+        <CardView
+          card={current}
+          revealed={revealed}
+          userChoice={userChoice}
+          onPick={pick}
+          onNext={next}
+        />
+      ) : exhausted ? (
+        <ExhaustedPanel />
+      ) : error ? (
+        <ErrorPanel
+          message={error}
+          onRetry={() => {
+            setError(null);
+            void fetchOne();
+          }}
+        />
+      ) : (
+        <LoadingPanel />
+      )}
     </div>
   );
 }
 
-function TopicPills({
-  topics,
-  currentTopic,
-}: {
-  topics: string[];
-  currentTopic?: string;
-}) {
+function TopicPills({ currentTopic }: { currentTopic?: string }) {
   const current = currentTopic?.trim().toLowerCase();
   return (
     <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2">
       <Pill href="/play" label="Random" active={!current} />
-      {topics.map((t) => (
+      {CURATED_TOPICS.map((t) => (
         <Pill
           key={t}
           href={`/play?topic=${encodeURIComponent(t)}`}
@@ -69,95 +173,41 @@ function Pill({
   );
 }
 
-function Game({ stack }: { stack: PlayCard[] }) {
-  const [index, setIndex] = useState(0);
-  const [choices, setChoices] = useState<Choice[]>([]);
-  const [revealed, setRevealed] = useState(false);
-
-  if (stack.length === 0) {
-    return <EmptyState />;
-  }
-
-  if (index >= stack.length) {
-    return (
-      <Results
-        stack={stack}
-        choices={choices}
-        onPlayAgain={() => {
-          setIndex(0);
-          setChoices([]);
-          setRevealed(false);
-        }}
-      />
-    );
-  }
-
-  const card = stack[index];
-  const matches = countMatches(stack, choices);
-
-  function pick(choice: Choice) {
-    setChoices((prev) => [...prev, choice]);
-    setRevealed(true);
-  }
-
-  function next() {
-    setIndex((i) => i + 1);
-    setRevealed(false);
-  }
-
-  const userChoice = revealed ? choices[choices.length - 1] : null;
-
-  return (
-    <div>
-      <ProgressLine
-        index={index}
-        total={stack.length}
-        matches={matches}
-      />
-      <PlayCardView card={card} revealed={revealed} userChoice={userChoice} />
-      {!revealed ? (
-        <ChoiceButtons onPick={pick} />
-      ) : (
-        <button
-          onClick={next}
-          className="mt-6 w-full rounded-xl bg-primary px-5 py-3 text-base font-medium text-primary-foreground transition hover:opacity-90"
-        >
-          {index === stack.length - 1 ? "See results" : "Next study"}
-        </button>
-      )}
-    </div>
-  );
-}
-
 function ProgressLine({
-  index,
-  total,
+  played,
   matches,
+  queueLength,
+  fetching,
 }: {
-  index: number;
-  total: number;
+  played: number;
   matches: number;
+  queueLength: number;
+  fetching: boolean;
 }) {
   return (
-    <div className="mb-3 flex items-baseline justify-between gap-3 text-xs text-ink/60">
-      <span>
-        Card {index + 1} of {total}
+    <div className="flex items-baseline justify-between gap-3 text-xs text-ink/60">
+      <span className="tabular-nums">
+        {matches} of {played} match{played === 1 ? "" : "es"}
       </span>
       <span className="tabular-nums">
-        {matches} match{matches === 1 ? "" : "es"} so far
+        {queueLength} ready{fetching ? " · loading more…" : ""}
       </span>
     </div>
   );
 }
 
-function PlayCardView({
+function CardView({
   card,
   revealed,
   userChoice,
+  onPick,
+  onNext,
 }: {
-  card: PlayCard;
+  card: LiveCard;
   revealed: boolean;
   userChoice: Choice | null;
+  onPick: (c: Choice) => void;
+  onNext: () => void;
 }) {
   const sc = card.score_card;
   const styles = BAND_STYLES[sc.band];
@@ -166,155 +216,143 @@ function PlayCardView({
   const match = revealed && userSaidTrust === friskerSaidTrust;
 
   return (
-    <article className="rounded-2xl border border-ink/10 bg-white p-6 shadow-sm sm:p-8">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <span className="inline-block rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium tracking-wider text-primary uppercase">
-          {card.topic}
-        </span>
-        {revealed && (
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 ${styles.badge}`}
-          >
-            <span className="text-sm font-bold tabular-nums">
-              {sc.overall_score}
-            </span>
-            <span className="text-[10px] font-semibold tracking-wider uppercase">
-              {sc.band}
-            </span>
+    <>
+      <article className="rounded-2xl border border-ink/10 bg-white p-6 shadow-sm sm:p-8">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <span className="inline-block rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium tracking-wider text-primary uppercase">
+            {card.topic}
           </span>
-        )}
-      </div>
-
-      <h2 className="text-xl leading-snug font-semibold text-ink sm:text-2xl">
-        {card.title}
-      </h2>
-
-      <div className="mt-4 flex items-start gap-2 text-sm leading-relaxed">
-        <FundingIcon />
-        <p className="text-ink">
-          <span className="font-semibold text-ink/70">Funded by:</span>{" "}
-          {sc.funding_flag}
-        </p>
-      </div>
-
-      <p className="mt-4 text-sm leading-relaxed text-ink/75">
-        {card.summary.tldr}
-      </p>
-
-      {revealed && (
-        <div
-          className={`mt-6 rounded-xl border p-4 ${
-            match
-              ? "border-accent/30 bg-accent/5"
-              : "border-red-300 bg-red-50"
-          }`}
-        >
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <span className="text-sm font-semibold text-ink">
-              You said {userSaidTrust ? "Trust" : "Junk"}
-            </span>
+          {revealed && (
             <span
-              className={`text-xs font-semibold tracking-wider uppercase ${
-                match ? "text-accent" : "text-red-700"
-              }`}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 ${styles.badge}`}
             >
-              {match ? "✓ Match" : "✗ Mismatch"}
+              <span className="text-sm font-bold tabular-nums">
+                {sc.overall_score}
+              </span>
+              <span className="text-[10px] font-semibold tracking-wider uppercase">
+                {sc.band}
+              </span>
             </span>
-          </div>
-          <p className="text-sm leading-relaxed text-ink">{sc.verdict}</p>
+          )}
         </div>
+
+        <h2 className="text-xl leading-snug font-semibold text-ink sm:text-2xl">
+          {card.title}
+        </h2>
+
+        <div className="mt-4 flex items-start gap-2 text-sm leading-relaxed">
+          <FundingIcon />
+          <p className="text-ink">
+            <span className="font-semibold text-ink/70">Funded by:</span>{" "}
+            {sc.funding_flag}
+          </p>
+        </div>
+
+        <p className="mt-4 text-sm leading-relaxed text-ink/75">
+          {card.summary.tldr}
+        </p>
+
+        {revealed && (
+          <div
+            className={`mt-6 rounded-xl border p-4 ${
+              match
+                ? "border-accent/30 bg-accent/5"
+                : "border-red-300 bg-red-50"
+            }`}
+          >
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <span className="text-sm font-semibold text-ink">
+                You said {userSaidTrust ? "Trust" : "Junk"}
+              </span>
+              <span
+                className={`text-xs font-semibold tracking-wider uppercase ${
+                  match ? "text-accent" : "text-red-700"
+                }`}
+              >
+                {match ? "✓ Match" : "✗ Mismatch"}
+              </span>
+            </div>
+            <p className="text-sm leading-relaxed text-ink">{sc.verdict}</p>
+            <p className="mt-2 text-xs text-ink/50">
+              PubMed PMID {card.pmid}
+            </p>
+          </div>
+        )}
+      </article>
+
+      {!revealed ? (
+        <div className="mt-6 grid grid-cols-2 gap-3">
+          <button
+            onClick={() => onPick("junk")}
+            className="rounded-xl border-2 border-red-300 bg-white px-5 py-4 text-base font-semibold text-red-700 transition hover:bg-red-50 active:scale-[0.98]"
+          >
+            Junk
+          </button>
+          <button
+            onClick={() => onPick("trust")}
+            className="rounded-xl border-2 border-accent bg-white px-5 py-4 text-base font-semibold text-accent transition hover:bg-accent/5 active:scale-[0.98]"
+          >
+            Trust
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={onNext}
+          className="mt-6 w-full rounded-xl bg-primary px-5 py-3 text-base font-medium text-primary-foreground transition hover:opacity-90"
+        >
+          Next study
+        </button>
       )}
-    </article>
+    </>
   );
 }
 
-function ChoiceButtons({ onPick }: { onPick: (c: Choice) => void }) {
+function LoadingPanel() {
   return (
-    <div className="mt-6 grid grid-cols-2 gap-3">
-      <button
-        onClick={() => onPick("junk")}
-        className="rounded-xl border-2 border-red-300 bg-white px-5 py-4 text-base font-semibold text-red-700 transition hover:bg-red-50 active:scale-[0.98]"
-      >
-        Junk
-      </button>
-      <button
-        onClick={() => onPick("trust")}
-        className="rounded-xl border-2 border-accent bg-white px-5 py-4 text-base font-semibold text-accent transition hover:bg-accent/5 active:scale-[0.98]"
-      >
-        Trust
-      </button>
+    <div className="rounded-2xl border border-ink/10 bg-white p-8 text-center">
+      <div
+        aria-hidden="true"
+        className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-ink/15 border-t-primary"
+      />
+      <p className="mt-4 text-sm text-ink/70">
+        Pulling a fresh study from PubMed…
+      </p>
+      <p className="mt-1 text-xs text-ink/50">
+        First card takes 10–20 seconds.
+      </p>
     </div>
   );
 }
 
-function Results({
-  stack,
-  choices,
-  onPlayAgain,
-}: {
-  stack: PlayCard[];
-  choices: Choice[];
-  onPlayAgain: () => void;
-}) {
-  const matches = countMatches(stack, choices);
-  const pct = Math.round((matches / stack.length) * 100);
-  return (
-    <article className="rounded-2xl border border-ink/10 bg-white p-6 text-center shadow-sm sm:p-8">
-      <h2 className="text-2xl font-semibold text-primary sm:text-3xl">
-        Stack complete
-      </h2>
-      <p className="mt-4 text-lg leading-relaxed text-ink">
-        You agreed with the frisker{" "}
-        <span className="font-bold tabular-nums">
-          {matches} of {stack.length}
-        </span>{" "}
-        times <span className="text-ink/60">({pct}%)</span>
-      </p>
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
-        <button
-          onClick={onPlayAgain}
-          className="rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition hover:opacity-90"
-        >
-          Play this stack again
-        </button>
-        <Link
-          href="/play"
-          className="rounded-xl border border-primary px-5 py-2.5 text-sm font-medium text-primary transition hover:bg-primary/5"
-        >
-          Pick a new stack
-        </Link>
-      </div>
-    </article>
-  );
-}
-
-function EmptyState() {
+function ExhaustedPanel() {
   return (
     <div className="rounded-2xl border border-ink/10 bg-white p-8 text-center">
       <p className="text-sm leading-relaxed text-ink/70">
-        No studies in this stack yet. Frisk a few to build a deck to play with.
+        You&apos;ve seen everything we could pull for this topic. Pick another
+        topic above, or hit Random for a mixed feed.
       </p>
-      <Link
-        href="/frisk"
-        className="mt-4 inline-block rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
-      >
-        Open Frisk
-      </Link>
     </div>
   );
 }
 
-function countMatches(stack: PlayCard[], choices: Choice[]): number {
-  let matches = 0;
-  for (let i = 0; i < choices.length; i++) {
-    const card = stack[i];
-    if (!card) continue;
-    const friskerSaidTrust =
-      card.score_card.band === "Solid" || card.score_card.band === "Mixed";
-    const userSaidTrust = choices[i] === "trust";
-    if (friskerSaidTrust === userSaidTrust) matches++;
-  }
-  return matches;
+function ErrorPanel({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
+      <p className="text-sm leading-relaxed text-red-800">{message}</p>
+      <button
+        onClick={onRetry}
+        className="mt-4 inline-block rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+      >
+        Try the next study
+      </button>
+    </div>
+  );
 }
 
 function FundingIcon() {
